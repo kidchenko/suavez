@@ -26,6 +26,9 @@ pub struct Config {
     /// No notification while the session's terminal is the app in front: you
     /// are looking at it. The bubble still turns.
     pub quiet_when_focused: bool,
+    /// No notification for sessions inside Claude Desktop, which notifies for
+    /// them itself. The bubble still turns.
+    pub quiet_in_claude_desktop: bool,
     /// Sessions that have not reported anything for this long are dropped.
     /// Covers a terminal closed without Claude Code getting to say goodbye.
     pub stale_hours: u64,
@@ -46,6 +49,7 @@ impl Default for Config {
             min_turn_seconds: 30,
             grace_seconds: 8,
             quiet_when_focused: true,
+            quiet_in_claude_desktop: true,
             stale_hours: 8,
             hooks_offered: false,
             offered: Vec::new(),

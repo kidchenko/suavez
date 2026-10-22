@@ -24,6 +24,15 @@ pub struct Terminal {
 
 pub use imp::{detect, focus, in_front};
 
+impl Terminal {
+    /// Whether this is Claude Desktop, which runs Claude Code itself and posts
+    /// its own notification when a turn ends. A second one from us is noise.
+    pub fn notifies_itself(&self) -> bool {
+        let file = self.name.rsplit(['/', '\\']).next().unwrap_or(&self.name);
+        file.eq_ignore_ascii_case("Claude.app") || file.eq_ignore_ascii_case("claude.exe")
+    }
+}
+
 /// Walk up from `start` through `parents` (pid → (parent pid, name)) and
 /// return the first ancestor `is_app` accepts. Stops at `stop` names, which are
 /// the desktop shell: past that point any window found is not the terminal.
@@ -327,5 +336,20 @@ mod tests {
             Some("/Applications/Visual Studio Code.app")
         );
         assert_eq!(outer_bundle("/bin/zsh"), None);
+    }
+
+    #[test]
+    fn knows_claude_desktop() {
+        let t = |name: &str| Terminal {
+            pid: 1,
+            name: name.into(),
+        };
+        assert!(t("/Applications/Claude.app").notifies_itself());
+        assert!(t("claude.exe").notifies_itself());
+        assert!(
+            t(r"C:\Users\me\AppData\Local\AnthropicClaude\app-1.0\claude.exe").notifies_itself()
+        );
+        assert!(!t("/Applications/WezTerm.app").notifies_itself());
+        assert!(!t("WindowsTerminal.exe").notifies_itself());
     }
 }

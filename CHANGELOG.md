@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+- No second notification for Claude Code sessions inside Claude Desktop, which
+  already sends its own. The bubble still turns. Turn it off under
+  **Settings → Quiet for Claude Desktop sessions**.
+
 ## [0.0.1] - 2026-10-22
 
 First release.

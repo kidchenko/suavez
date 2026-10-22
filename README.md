@@ -68,6 +68,7 @@ Everything you set once lives under **Settings ▸**:
 | **Notify when it's your turn** | A notification when a turn ends. |
 | **Notify when an agent needs you** | A notification when an agent is blocked on you. |
 | **Quiet while its terminal is in front** | No notification while you're already in the session's terminal (in WezTerm, its pane). On by default. |
+| **Quiet for Claude Desktop sessions** | No notification for Claude Code sessions inside Claude Desktop, which sends its own. The bubble still turns. On by default. |
 | **Connect to …** | One per installed agent. Adds or removes Sua Vez's hooks in that agent's settings. |
 | **Run at login** | Per-user, no admin. |
 | **Forget all sessions** | For a session stuck on "working" after a terminal crashed. Live sessions come back with their next event. |
@@ -213,6 +214,7 @@ location.
   "minTurnSeconds": 30,
   "graceSeconds": 8,
   "quietWhenFocused": true,
+  "quietInClaudeDesktop": true,
   "staleHours": 8,
   "offered": ["claude", "codex"]
 }
@@ -223,6 +225,7 @@ location.
 | `minTurnSeconds` | Turns shorter than this don't notify when they end. `0` notifies every time. |
 | `graceSeconds` | How long a permission prompt waits before it notifies. |
 | `quietWhenFocused` | Skip notifications while the session's terminal is in front. |
+| `quietInClaudeDesktop` | Skip notifications for sessions inside Claude Desktop, which notifies for them itself. |
 | `staleHours` | Sessions quiet for this long are dropped. |
 | `offered` | Agents Sua Vez has already connected to by itself, so disconnecting one stays disconnected. |
 

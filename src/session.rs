@@ -381,6 +381,8 @@ pub struct Rules {
     pub grace_secs: u64,
     /// No notification while the session's terminal is the app in front.
     pub quiet_when_focused: bool,
+    /// No notification for sessions inside Claude Desktop, which sends its own.
+    pub quiet_in_claude_desktop: bool,
 }
 
 #[derive(Default)]
@@ -411,7 +413,11 @@ impl Tracker {
         rules: &Rules,
         in_front: &dyn Fn(&Session) -> bool,
     ) -> Vec<Toast> {
-        let watching = |s: &Session| rules.quiet_when_focused && in_front(s);
+        let quiet = |s: &Session| {
+            (rules.quiet_when_focused && in_front(s))
+                || (rules.quiet_in_claude_desktop
+                    && s.terminal.as_ref().is_some_and(|t| t.notifies_itself()))
+        };
         let live: HashSet<(String, u64)> = sessions.iter().map(Session::episode).collect();
         self.announced.retain(|k| live.contains(k));
         self.seen.retain(|k| live.contains(k));
@@ -431,7 +437,7 @@ impl Tracker {
             let name = &names[&s.id];
             match s.state {
                 State::Done => {
-                    if rules.notify_done && s.turn_secs() >= rules.min_turn_secs && !watching(s) {
+                    if rules.notify_done && s.turn_secs() >= rules.min_turn_secs && !quiet(s) {
                         toasts.push(Toast {
                             session: s.id.clone(),
                             title: format!("Your turn in {name}"),
@@ -450,7 +456,7 @@ impl Tracker {
                     if now.saturating_sub(s.since) < rules.grace_secs {
                         continue;
                     }
-                    if rules.notify_needs_you && !watching(s) {
+                    if rules.notify_needs_you && !quiet(s) {
                         toasts.push(Toast {
                             session: s.id.clone(),
                             title: format!("{name} needs you"),
@@ -558,6 +564,7 @@ mod tests {
         min_turn_secs: 30,
         grace_secs: 8,
         quiet_when_focused: true,
+        quiet_in_claude_desktop: true,
     };
 
     #[test]
@@ -723,6 +730,35 @@ mod tests {
         t.update(&[], 0, &loud, &|_| false);
         assert_eq!(
             t.update(&[done("b", 60, 100)], 100, &loud, &|_| true).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn claude_desktop_notifies_for_its_own_sessions() {
+        let in_desktop = |id| Session {
+            terminal: Some(crate::terminal::Terminal {
+                pid: 1,
+                name: "/Applications/Claude.app".into(),
+            }),
+            ..done(id, 60, 100)
+        };
+        let mut t = Tracker::default();
+        t.update(&[], 0, &RULES, &|_| false);
+        let a = in_desktop("a");
+        assert!(t
+            .update(std::slice::from_ref(&a), 100, &RULES, &|_| false)
+            .is_empty());
+        assert_eq!(t.overall(&[a]), Overall::YourTurn, "the bubble still turns");
+
+        let loud = Rules {
+            quiet_in_claude_desktop: false,
+            ..RULES
+        };
+        let mut t = Tracker::default();
+        t.update(&[], 0, &loud, &|_| false);
+        assert_eq!(
+            t.update(&[in_desktop("b")], 100, &loud, &|_| false).len(),
             1
         );
     }

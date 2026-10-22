@@ -25,6 +25,7 @@ const ID_SEEN_ALL: &str = "seen-all";
 const ID_NOTIFY_DONE: &str = "notify-done";
 const ID_NOTIFY_NEEDS: &str = "notify-needs";
 const ID_QUIET_FOCUSED: &str = "quiet-focused";
+const ID_QUIET_DESKTOP: &str = "quiet-desktop";
 const ID_CONNECT: &str = "connect:";
 const ID_FORGET: &str = "forget";
 const ID_EDIT: &str = "edit-config";
@@ -203,6 +204,10 @@ impl App {
                 self.cfg.quiet_when_focused = !self.cfg.quiet_when_focused;
                 self.save();
             }
+            ID_QUIET_DESKTOP => {
+                self.cfg.quiet_in_claude_desktop = !self.cfg.quiet_in_claude_desktop;
+                self.save();
+            }
             ID_FORGET => {
                 linfo!("forgetting all sessions");
                 session::remove_all();
@@ -281,6 +286,7 @@ impl App {
             min_turn_secs: self.cfg.min_turn_seconds,
             grace_secs: self.cfg.grace_seconds,
             quiet_when_focused: self.cfg.quiet_when_focused,
+            quiet_in_claude_desktop: self.cfg.quiet_in_claude_desktop,
         }
     }
 
@@ -532,11 +538,12 @@ impl App {
         let rows = self.rows();
         let autostart_on = autostart::is_enabled();
         let sig = format!(
-            "{header}|{rows:?}|{:?}{}{}{}{autostart_on}",
+            "{header}|{rows:?}|{:?}{}{}{}{}{autostart_on}",
             self.connected,
             self.cfg.notify_done,
             self.cfg.notify_needs_you,
-            self.cfg.quiet_when_focused
+            self.cfg.quiet_when_focused,
+            self.cfg.quiet_in_claude_desktop
         );
         // Rebuilding closes an open menu on some platforms, so only when
         // something on it actually changed.
@@ -590,6 +597,13 @@ impl App {
             "Quiet while its terminal is in front",
             true,
             self.cfg.quiet_when_focused,
+            None,
+        ));
+        let _ = settings.append(&CheckMenuItem::with_id(
+            ID_QUIET_DESKTOP,
+            "Quiet for Claude Desktop sessions",
+            true,
+            self.cfg.quiet_in_claude_desktop,
             None,
         ));
         let _ = settings.append(&PredefinedMenuItem::separator());
