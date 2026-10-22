@@ -249,7 +249,7 @@ the PNGs.
 
 ## Releasing
 
-1. Bump `version` in `Cargo.toml` and add a section to `CHANGELOG.md`.
+1. Bump `version` in `Cargo.toml` and add a `## [X.Y.Z] - date` section to `CHANGELOG.md`; it becomes the release notes.
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`
 
 The `release` workflow builds the DMG on macOS and the installer on Windows,

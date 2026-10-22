@@ -117,6 +117,15 @@ jobs:
     if: needs.version.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Release notes from CHANGELOG.md
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          # The lines between "## [v]" and the next "## [" heading.
+          awk -v h="## [$v]" 'index($0, "## [") == 1 { p = (index($0, h) == 1); next } p' \
+            CHANGELOG.md > notes.md
+          grep -q '[^[:space:]]' notes.md || { echo "::error::no '## [$v]' section in CHANGELOG.md"; exit 1; }
+          cat notes.md
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -134,7 +143,7 @@ jobs:
             gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" \
-              --title "Sua Vez ${TAG#v}" --verify-tag --generate-notes
+              --title "Sua Vez ${TAG#v}" --verify-tag --notes-file notes.md
           fi
 
   # Optional: only runs when the CHOCO_API_KEY secret is set. New packages go
