@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sua Vez: know when Claude Code is done</title>
+<meta name="description" content="A speech bubble in the tray that turns green when Claude Code finishes and amber when it's waiting on you. For Windows and macOS. Free and open source.">
+<link rel="icon" href="img/icon-256.png" type="image/png">
+
+<meta property="og:title" content="Sua Vez: know when Claude Code is done">
+<meta property="og:description" content="A tray bubble that lights up when Claude Code finishes or needs you. For Windows and macOS.">
+<meta property="og:image" content="img/icon-256.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+
+<style>
+  /* Deep green and cream, from the app icon. Green is the "your turn" bubble
+     and amber the "needs you" one, so the page uses the product's two signals
+     as its only accents. */
+  :root {
+    --bg:      #0d1712;
+    --raised:  #14231b;
+    --line:    #23392d;
+    --text:    #eef6f0;
+    --dim:     #a9c2b3;
+    --faint:   #6f8a7b;
+    --accent:  #54cc7a;
+    --on-acc:  #06210f;
+    --wait:    #f9ad29;
+    --menu-bg: #2b2b2b;
+    --menu-tx: #f2f2f2;
+    --menu-dim:#9a9a9a;
+    --menu-hl: #3d3d3d;
+    --radius:  14px;
+    --measure: 46rem;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg:     #f4faf5;
+      --raised: #e7f2ea;
+      --line:   #cfe2d5;
+      --text:   #0f2318;
+      --dim:    #4b6657;
+      --faint:  #7a9586;
+      --accent: #1d8a45;
+      --on-acc: #f4fff7;
+      --wait:   #c9790a;
+      --menu-bg:#f9f9f9;
+      --menu-tx:#1b1b1b;
+      --menu-dim:#7a7a7a;
+      --menu-hl:#e8e8e8;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.65 "Segoe UI Variable Text", "Segoe UI", system-ui,
+          -apple-system, "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: var(--measure); margin: 0 auto; padding: 0 20px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: "Cascadia Code", Consolas, ui-monospace, monospace;
+    font-size: .88em;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: .12em .42em;
+    white-space: nowrap;
+  }
+
+  /* ------------------------------------------------------------------ hero */
+  header.wrap { text-align: center; padding-top: 84px; padding-bottom: 8px; }
+  header img.mark { width: 128px; height: 128px; filter: drop-shadow(0 18px 36px rgba(0,0,0,.35)); }
+  h1 {
+    font-size: clamp(2.7rem, 9vw, 4.2rem);
+    font-weight: 700;
+    letter-spacing: -.03em;
+    line-height: 1.04;
+    margin: 26px 0 0;
+  }
+  .tagline { font-size: clamp(1.12rem, 3.6vw, 1.45rem); color: var(--dim); margin: 14px auto 0; max-width: 36ch; }
+  .pt { color: var(--faint); font-size: .95rem; margin: 10px 0 0; }
+
+  .cta { margin: 36px 0 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .download {
+    display: inline-block;
+    font-weight: 650;
+    font-size: 1.04rem;
+    padding: 14px 28px;
+    border-radius: 11px;
+    background: var(--accent);
+    color: var(--on-acc);
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .download:hover { text-decoration: none; transform: translateY(-1px); filter: brightness(1.07); }
+  .download.ghost, .os-mac .dl-win {
+    background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--line);
+  }
+  .os-mac .dl-mac { background: var(--accent); color: var(--on-acc); box-shadow: none; order: -1; }
+  .alt { margin: 18px 0 0; color: var(--faint); font-size: .94rem; }
+
+  /* ---------------------------------------------------------------- demo */
+  .demo { margin: 64px auto 0; display: flex; flex-direction: column; align-items: center; }
+  .menu {
+    width: min(100%, 360px);
+    background: var(--menu-bg);
+    color: var(--menu-tx);
+    border-radius: 10px;
+    padding: 6px;
+    font: 14px/1.2 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+    box-shadow: 0 24px 60px rgba(0,0,0,.42), 0 0 0 1px rgba(127,127,127,.18);
+    text-align: left;
+    user-select: none;
+  }
+  .menu .row, .menu button.row {
+    display: grid; grid-template-columns: 22px 1fr auto; align-items: center;
+    padding: 7px 10px; border-radius: 6px; cursor: default;
+  }
+  .menu button.row { all: unset; display: grid; grid-template-columns: 22px 1fr auto; align-items: center;
+    padding: 7px 10px; border-radius: 6px; cursor: pointer; width: 100%; box-sizing: border-box; }
+  .menu button.row:hover, .menu button.row:focus-visible { background: var(--menu-hl); }
+  .menu button.row:disabled { cursor: default; color: var(--menu-dim); }
+  .menu button.row:disabled:hover { background: none; }
+  .menu .head { color: var(--menu-dim); }
+  .menu .sep { height: 1px; background: rgba(127,127,127,.25); margin: 5px 8px; }
+  .menu .chk { visibility: hidden; font-size: 13px; }
+  .menu .on .chk { visibility: visible; }
+  .menu .mark { font-size: 13px; }
+  .menu .needs .mark { color: var(--wait); }
+  .menu .turn .mark { color: var(--accent); }
+  .menu .when { color: var(--menu-dim); font-size: 12.5px; padding-left: 10px; }
+
+  .stage { position: relative; width: min(100%, 360px); }
+  .taskbar {
+    margin-top: 16px;
+    display: flex; align-items: center; justify-content: flex-end; gap: 12px;
+    background: #1f1f1f; border-radius: 10px; padding: 8px 14px;
+    color: #e6e6e6; font-size: 13px;
+    box-shadow: 0 0 0 1px rgba(127,127,127,.2);
+  }
+  .taskbar img { width: 24px; height: 24px; display: block; }
+
+  .toast {
+    position: absolute; right: 0; bottom: 56px; width: min(100%, 300px);
+    background: #2b2b2b; color: #f2f2f2; border-radius: 10px; padding: 12px 14px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.45), 0 0 0 1px rgba(127,127,127,.2);
+    font-size: 13px; line-height: 1.4; text-align: left;
+    opacity: 0; transform: translateY(8px); pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease;
+  }
+  .toast.show { opacity: 1; transform: none; }
+  .toast { border-left: 4px solid var(--accent); }
+  .toast.needs { border-left-color: var(--wait); }
+  .toast b { display: block; font-size: 14px; margin-bottom: 2px; }
+  .toast span { color: #bdbdbd; }
+
+  .controls { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .controls button {
+    font: 600 .95rem/1 inherit; font-family: inherit; cursor: pointer;
+    padding: 11px 18px; border-radius: 9px; border: 0;
+    background: var(--accent); color: var(--on-acc);
+  }
+  .controls button.ghost { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--line); }
+  .controls button[hidden] { display: none; }
+  .controls button:disabled { opacity: .45; cursor: default; }
+  .hint { color: var(--faint); font-size: .86rem; margin-top: 12px; text-align: center; max-width: 36ch; }
+
+  /* ------------------------------------------------------------- sections */
+  section { padding: 76px 0 0; }
+  h2 { font-size: clamp(1.6rem, 5vw, 2.1rem); letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+  .lede { color: var(--dim); margin: 0 0 28px; max-width: 42ch; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr)); gap: 14px; }
+  .card { background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 20px 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 1.04rem; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--dim); font-size: .95rem; line-height: 1.55; }
+  .card .ico { font-size: 1.35rem; line-height: 1; margin-bottom: 12px; display: block; }
+
+  .faces { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 14px; }
+  .face { display: flex; gap: 14px; align-items: center;
+    background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+  .face .chip { flex: none; width: 52px; height: 52px; border-radius: 10px; background: #1f1f1f;
+    display: grid; place-items: center; }
+  .face .chip img { width: 34px; height: 34px; }
+  .face b { display: block; font-size: .98rem; }
+  .face span { color: var(--dim); font-size: .9rem; line-height: 1.4; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .96rem; }
+  td { padding: 12px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  td:first-child { color: var(--dim); width: 34%; padding-right: 16px; }
+  tr:last-child td { border-bottom: 1px solid var(--line); }
+
+  .how { background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 22px 6px; }
+  .how p { margin: 0 0 16px; color: var(--dim); }
+  .how p b { color: var(--text); font-weight: 600; }
+  .how ol { margin: 0 0 16px; padding-left: 1.3em; color: var(--dim); }
+  .how li { margin: 0 0 6px; }
+
+  footer { padding: 84px 0 56px; color: var(--faint); font-size: .9rem; text-align: center; }
+  footer a { color: var(--dim); }
+
+  @media (max-width: 520px) {
+    header.wrap { padding-top: 56px; }
+    td:first-child { width: 40%; }
+    code { white-space: normal; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <img class="mark" src="img/icon-256.png" alt="" width="128" height="128">
+  <h1>Sua Vez</h1>
+  <p class="tagline">Your tray lights up when Claude Code finishes, or when it's stuck waiting on you.</p>
+  <p class="pt"><i>sua vez</i> is Portuguese for <i>your turn</i></p>
+
+  <div class="cta">
+    <a class="download dl-win" href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez-Setup.exe">Download for Windows</a>
+    <a class="download ghost dl-mac" href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez.dmg">Download for macOS</a>
+  </div>
+  <p class="alt">Free and open source. Under 1 MB.</p>
+</header>
+
+<div class="wrap demo" aria-label="Interactive preview of Sua Vez">
+  <div class="menu" role="menu" id="menu">
+    <div class="row head"><span></span><span id="header">1 working</span><span></span></div>
+    <div class="sep"></div>
+    <button class="row" id="row-cota" role="menuitem" disabled><span class="mark" id="mark-cota"></span><span id="text-cota">cota: ready</span><span class="when" id="when-cota"></span></button>
+    <div class="row"><span class="mark">…</span><span>presence-sync is working</span><span class="when">6m</span></div>
+    <div class="sep"></div>
+    <button class="row" id="seen-all" role="menuitem" disabled><span></span><span>Mark all as seen</span><span></span></button>
+    <div class="row"><span></span><span>Forget all sessions</span><span></span></div>
+    <div class="sep"></div>
+    <div class="row on"><span class="chk">✓</span><span>Notify when Claude finishes</span><span></span></div>
+    <div class="row on"><span class="chk">✓</span><span>Notify when Claude needs you</span><span></span></div>
+    <div class="row"><span></span><span>Edit settings…</span><span></span></div>
+    <div class="sep"></div>
+    <div class="row on"><span class="chk">✓</span><span>Connect to Claude Code</span><span></span></div>
+    <div class="row on"><span class="chk">✓</span><span>Run at login</span><span></span></div>
+    <div class="sep"></div>
+    <div class="row"><span></span><span>Quit Sua Vez</span><span></span></div>
+  </div>
+
+  <div class="stage">
+    <div class="toast" id="toast" role="status" aria-live="polite"><b id="toast-title"></b><span id="toast-body"></span></div>
+    <div class="taskbar" aria-hidden="true">
+      <img id="bubble" src="img/bubble-working.png" alt=""><span id="clock">17:42</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="play">Give Claude a task</button>
+    <button id="allow" class="ghost" hidden>Allow Bash</button>
+  </div>
+  <p class="hint" id="hint">Try it: give Claude a task in <code>cota</code> and watch the bubble.</p>
+</div>
+
+<main class="wrap">
+  <section>
+    <h2>Stop checking the terminal</h2>
+    <p class="lede">Give Claude a task, go do something else, and come back when it's your move instead of every few minutes.</p>
+    <div class="grid">
+      <div class="card"><span class="ico">✅</span><h3>When Claude finishes</h3><p>The bubble turns green and a notification says which project is waiting and how long the turn took.</p></div>
+      <div class="card"><span class="ico">✋</span><h3>When Claude is blocked</h3><p>A permission prompt or a question turns it amber, so a task doesn't sit for twenty minutes on a yes or no.</p></div>
+      <div class="card"><span class="ico">🗂</span><h3>Every session at once</h3><p>The menu lists each open session by project folder, most urgent first.</p></div>
+      <div class="card"><span class="ico">🔕</span><h3>Quiet while you watch</h3><p>Turns under 30 seconds and prompts you answer within 8 seconds don't notify. You were already looking.</p></div>
+      <div class="card"><span class="ico">🔌</span><h3>Sets itself up</h3><p>The first launch adds its hooks to Claude Code's settings and leaves everything else in that file as it was.</p></div>
+      <div class="card"><span class="ico">🪶</span><h3>Light</h3><p>Under 1 MB on disk and about 2 MB of memory. The hook it runs finishes in around 50 ms.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Read it at a glance</h2>
+    <p class="lede">With several sessions open, the bubble shows the most urgent one.</p>
+    <div class="faces">
+      <div class="face"><div class="chip"><img src="img/bubble-idle.png" alt=""></div><div><b>Outline</b><span>Nothing going on.</span></div></div>
+      <div class="face"><div class="chip"><img src="img/bubble-working.png" alt=""></div><div><b>Dots</b><span>Claude is working.</span></div></div>
+      <div class="face"><div class="chip"><img src="img/bubble-turn.png" alt=""></div><div><b>Green</b><span>Claude finished. Your turn.</span></div></div>
+      <div class="face"><div class="chip"><img src="img/bubble-needs.png" alt=""></div><div><b>Amber</b><span>Claude is waiting on a permission prompt or a question.</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="how">
+      <p>Claude Code can run a command on certain events, called <b>hooks</b>. Sua Vez registers itself for six of them, from a prompt being submitted to a session ending.</p>
+      <ol>
+        <li>Claude Code runs <code>suavez hook</code> and passes it the event.</li>
+        <li>That process writes a small file for the session and pokes the tray.</li>
+        <li>The tray rereads the files and repaints the bubble.</li>
+      </ol>
+      <p>The hook prints nothing and always exits cleanly, so a failure in Sua Vez never stops Claude. When it edits <code>settings.json</code>, it only touches its own entries. Your other hooks and settings keep their place.</p>
+      <p>Disconnect any time from the menu, or with <code>suavez uninstall</code> in a terminal.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Install</h2>
+    <table>
+      <tr><td>Windows installer</td><td><a href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez-Setup.exe">SuaVez-Setup.exe</a></td></tr>
+      <tr><td>macOS</td><td><a href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez.dmg">SuaVez.dmg</a> (Apple silicon and Intel)</td></tr>
+      <tr><td>From source</td><td><a href="https://github.com/kidchenko/suavez#build">Build with Rust</a></td></tr>
+    </table>
+    <p class="alt" style="text-align:left">Windows 10 or later, macOS 11 or later, and Claude Code. Sessions that were already open before you install need a restart.</p>
+  </section>
+</main>
+
+<footer class="wrap">
+  Made by <a href="https://github.com/kidchenko">kidchenko</a> · MIT licensed ·
+  <a href="https://github.com/kidchenko/suavez">Source</a> ·
+  <a href="https://github.com/kidchenko/suavez/releases">Releases</a> ·
+  Also: <a href="https://github.com/kidchenko/cota">Cota</a>,
+  <a href="https://github.com/kidchenko/cantos">Cantos</a>,
+  <a href="https://github.com/kidchenko/cafe">Cafe</a>
+</footer>
+
+<script>
+  // Lead with the visitor's platform. Without script both buttons still work.
+  try {
+    var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+    if (/mac/i.test(p)) document.body.classList.add("os-mac");
+  } catch (e) {}
+
+  // The demo: one session, cota, goes through a turn the way the app sees it.
+  // presence-sync just keeps working in the background.
+  (function () {
+    var $ = function (id) { return document.getElementById(id); };
+    var row = $("row-cota"), mark = $("mark-cota"), text = $("text-cota"), when = $("when-cota");
+    var header = $("header"), bubble = $("bubble"), seenAll = $("seen-all");
+    var play = $("play"), allow = $("allow"), hint = $("hint");
+    var toast = $("toast"), toastTimer = null, stepTimer = null;
+    var state = "ready", seen = false;
+
+    var d = new Date();
+    $("clock").textContent = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+
+    function notify(kind, title, body) {
+      $("toast-title").textContent = title;
+      $("toast-body").textContent = body;
+      toast.className = "toast show " + kind;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { toast.classList.remove("show"); }, 6000);
+    }
+
+    function paint() {
+      var wants = state === "needs" || state === "done";
+      var unseen = wants && !seen;
+      row.className = "row" + (state === "needs" ? " needs" : state === "done" ? " turn" : "");
+      row.disabled = !unseen;
+      seenAll.disabled = !unseen;
+      mark.textContent = { ready: "", working: "…", needs: seen ? "○" : "⚠", done: seen ? "○" : "●" }[state];
+      text.textContent = {
+        ready: "cota: ready",
+        working: "cota is working",
+        needs: "cota wants to use Bash",
+        done: "cota: your turn"
+      }[state];
+      when.textContent = state === "ready" ? "" : state === "working" ? "just started" : "just now";
+
+      var parts = [];
+      if (state === "needs") parts.push("1 needs you");
+      if (state === "done") parts.push("1 your turn");
+      parts.push(state === "working" ? "2 working" : "1 working");
+      header.textContent = parts.join(" · ");
+
+      bubble.src = "img/bubble-" + (unseen ? (state === "needs" ? "needs" : "turn") : "working") + ".png";
+    }
+
+    function go(next) { state = next; seen = false; paint(); }
+
+    play.addEventListener("click", function () {
+      clearTimeout(stepTimer);
+      toast.classList.remove("show");
+      go("working");
+      play.disabled = true;
+      allow.hidden = true;
+      hint.textContent = "Claude is working. The bubble shows dots.";
+      stepTimer = setTimeout(function () {
+        go("needs");
+        allow.hidden = false;
+        hint.textContent = "Claude wants to run a command and is waiting on you.";
+        notify("needs", "cota needs you", "Claude needs your permission to use Bash");
+      }, 2600);
+    });
+
+    allow.addEventListener("click", function () {
+      allow.hidden = true;
+      go("working");
+      hint.textContent = "Back to work.";
+      stepTimer = setTimeout(function () {
+        go("done");
+        play.disabled = false;
+        play.textContent = "Give Claude another task";
+        hint.textContent = "Done. Click the cota row in the menu to mark it as seen.";
+        notify("turn", "Your turn in cota", "Claude finished after 4m.");
+      }, 2400);
+    });
+
+    function markSeen() {
+      seen = true;
+      paint();
+      hint.textContent = "Seen. The bubble goes back to showing the other session.";
+    }
+    row.addEventListener("click", markSeen);
+    seenAll.addEventListener("click", markSeen);
+
+    paint();
+  })();
+</script>
+</body>
+</html>
