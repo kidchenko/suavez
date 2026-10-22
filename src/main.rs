@@ -14,6 +14,7 @@
 //! | `app`             | the tray icon and its menu                           |
 //! | `single_instance` | one copy at a time; relaunch and hook pokes          |
 //! | `autostart`       | run at login                                         |
+//! | `terminal`        | finds a session's terminal and brings it forward     |
 //!
 //! The same binary is the hook: Claude Code runs `suavez hook` with the event
 //! on stdin, and that process updates a file and pokes the tray.
@@ -27,6 +28,7 @@ mod log;
 mod notify;
 mod session;
 mod single_instance;
+mod terminal;
 mod theme;
 mod util;
 

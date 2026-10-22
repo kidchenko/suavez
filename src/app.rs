@@ -12,7 +12,7 @@ use crate::log::{lerror, linfo, lwarn};
 use crate::session::{self, Overall, Rules, Session, State, Tracker};
 use crate::single_instance::Msg;
 use crate::util::{ago, now_unix, span};
-use crate::{autostart, hooks, notify, theme};
+use crate::{autostart, hooks, notify, terminal, theme};
 
 use std::time::{Duration, Instant, SystemTime};
 use tao::event_loop::EventLoopProxy;
@@ -178,6 +178,12 @@ impl App {
                 if let Some(sid) = other.strip_prefix(ID_SESSION) {
                     if let Some(s) = self.sessions.iter().find(|s| s.id == sid) {
                         self.tracker.mark_seen(s);
+                        if let Some(t) = &s.terminal {
+                            match terminal::focus(t) {
+                                Ok(()) => linfo!("brought {} forward", t.name),
+                                Err(e) => lwarn!("{e}"),
+                            }
+                        }
                     }
                 }
             }
@@ -418,6 +424,8 @@ impl App {
                     }
                     State::Ready => (format!("     {name}: ready"), false),
                 };
+                // Any row whose terminal is known can bring it forward.
+                let clickable = clickable || s.terminal.is_some();
                 (format!("{ID_SESSION}{}", s.id), label, clickable)
             })
             .collect()
@@ -447,7 +455,8 @@ impl App {
                 let id = if *clickable { id.as_str() } else { ID_INERT };
                 let _ = menu.append(&MenuItem::with_id(id, label, *clickable, None));
             }
-            let any_unseen = rows.iter().any(|(_, _, c)| *c);
+            let any_unseen = self.tracker.overall(&self.sessions) == Overall::NeedsYou
+                || self.tracker.overall(&self.sessions) == Overall::YourTurn;
             let _ = menu.append(&PredefinedMenuItem::separator());
             let _ = menu.append(&MenuItem::with_id(
                 ID_SEEN_ALL,

@@ -53,6 +53,11 @@ pub struct Session {
     /// Claude's own words for `NeedsYou`, e.g. "Claude needs your permission
     /// to use Bash".
     pub message: String,
+    /// The app the session runs in, for bringing it to the front.
+    pub terminal: Option<crate::terminal::Terminal>,
+    /// Whether the hook has looked for `terminal` yet. It looks once per
+    /// session: a miss would only miss again, and the walk is not free.
+    pub terminal_checked: bool,
 }
 
 impl Session {
@@ -221,7 +226,11 @@ pub fn ingest(stdin: &str, now: u64) -> Result<(), String> {
             }
             _ => Ok(()),
         },
-        Change::Write(s) => {
+        Change::Write(mut s) => {
+            if !s.terminal_checked {
+                s.terminal_checked = true;
+                s.terminal = crate::terminal::detect();
+            }
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             let json = serde_json::to_string(&s).map_err(|e| e.to_string())?;
             // A temp name per process: two hooks for one session can overlap
@@ -547,7 +556,7 @@ mod tests {
             since: at,
             updated: at,
             turn_started: at - turn,
-            message: String::new(),
+            ..Session::default()
         }
     }
 

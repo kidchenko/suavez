@@ -45,8 +45,13 @@ Every open session is listed by project folder, most urgent first:
 …  presence-sync is working · 1m
 ```
 
-Click a row to mark it as seen. A seen session stops colouring the bubble until
-it finishes again.
+Click a session to bring its terminal to the front, whether that's Windows
+Terminal, WezTerm, VS Code, iTerm or Terminal.app. Clicking also marks it as
+seen, and a seen session stops colouring the bubble until it finishes again.
+
+Sua Vez finds the app, not the tab. With several tabs in one Windows Terminal
+window you get that window, and with two VS Code windows you get the one that
+was in front last.
 
 | | |
 |---|---|
@@ -152,7 +157,9 @@ registers itself, `suavez hook`, for six of them:
 | `SessionEnd` | the session is removed |
 
 The hook process writes one small JSON file per session under `sessions/` in
-the data folder, pokes the tray, and exits in about 50 ms. It prints nothing
+the data folder, pokes the tray, and exits in about 50 ms. The first event of a
+session takes about twice as long, because that's when it walks up its parent
+processes to find the terminal app and saves it with the session. It prints nothing
 and always exits 0, so a failure in Sua Vez never stops Claude. The tray rereads
 the folder when poked, plus once every 15 seconds as a fallback and to drop
 sessions that have been quiet for 8 hours. Those are usually ones whose
@@ -210,7 +217,7 @@ the PNGs.
 
 ## Releasing
 
-1. Bump `version` in `Cargo.toml`.
+1. Bump `version` in `Cargo.toml` and add a section to `CHANGELOG.md`.
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`
 
 The `release` workflow builds the DMG on macOS and the installer on Windows,
@@ -230,7 +237,7 @@ built and uploaded as artifacts, and nothing is published.
 
 ## Not yet
 
-- Clicking a session to bring its terminal to the front.
+- Bringing the exact tab forward, not just the terminal's window.
 - Claude Code running inside WSL. Its hooks run on the Linux side and can't
   reach a Windows tray.
 
