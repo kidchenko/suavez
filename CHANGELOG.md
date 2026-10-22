@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+- Icons in the menu, from Lucide: each session shows its state in the bubble's
+  colours, and the actions have their own. **Quit** is ⌘Q and **Edit config
+  file…** is ⌘, on macOS, and Settings ends with the version.
+
 ## [0.0.2] - 2026-10-23
 
 - No second notification for Claude Code sessions inside Claude Desktop, which

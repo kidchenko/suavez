@@ -7,6 +7,7 @@
 //! "3m ago" labels honest.
 
 use crate::agent::Agent;
+use crate::art::{self, Ink};
 use crate::config::Config;
 use crate::icon::{self, Face};
 use crate::log::{lerror, linfo, lwarn};
@@ -17,7 +18,11 @@ use crate::{autostart, hooks, notify, terminal, theme, wezterm};
 
 use std::time::{Duration, Instant, SystemTime};
 use tao::event_loop::EventLoopProxy;
-use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
+use tray_icon::menu::accelerator::Accelerator;
+use tray_icon::menu::{
+    CheckMenuItem, Icon as MenuIcon, IconMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem,
+    Submenu,
+};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 const ID_SESSION: &str = "s:";
@@ -59,6 +64,8 @@ pub struct App {
     proxy: EventLoopProxy<UserEvent>,
     tray: TrayIcon,
     dark_taskbar: bool,
+    /// Whether menus are drawn dark, so their icons can be tinted to match.
+    dark_menus: bool,
     sessions: Vec<Session>,
     tracker: Tracker,
     /// Agents whose hooks are in place, as of the last look.
@@ -96,6 +103,7 @@ impl App {
             cfg: Config::load(),
             tray,
             dark_taskbar,
+            dark_menus: theme::menus_are_dark(),
             sessions: Vec::new(),
             tracker: Tracker::default(),
             connected: Vec::new(),
@@ -268,6 +276,8 @@ impl App {
             self.dark_taskbar = dark;
             self.paint_icon(true);
         }
+        // The signature includes this, so a theme change redraws the menu.
+        self.dark_menus = theme::menus_are_dark();
         self.scan();
     }
 
@@ -493,7 +503,9 @@ impl App {
         }
     }
 
-    fn rows(&self) -> Vec<(String, String, bool)> {
+    /// Each session's menu row: id, label, whether it can be clicked, and the
+    /// glyph for its state.
+    fn rows(&self) -> Vec<(String, String, bool, &'static str, Ink)> {
         let now = now_unix();
         let names = session::display_names(&self.sessions);
         self.sessions
@@ -503,40 +515,49 @@ impl App {
                 let elapsed = now.saturating_sub(s.since);
                 let when = ago(elapsed);
                 let seen = self.tracker.is_seen(s);
+                // A seen session keeps its words but loses its colour, like
+                // the bubble.
+                let (glyph, ink) = match s.state {
+                    State::NeedsYou if !seen => ("circle-alert", Ink::Wait),
+                    State::Done if !seen => ("circle-check", Ink::Go),
+                    State::Working => ("circle-dashed", Ink::Text),
+                    _ => ("circle", Ink::Text),
+                };
                 let (label, clickable) = match s.state {
                     State::NeedsYou => (
                         format!(
-                            "{}  {} \u{00b7} {when}",
-                            if seen { "\u{25cb}" } else { "\u{26a0}" },
+                            "{} \u{00b7} {when}",
                             menu_text(&blocked_line(&names[&s.id], &s.message))
                         ),
                         !seen,
                     ),
-                    State::Done => (
-                        format!(
-                            "{}  {name}: your turn \u{00b7} {when}",
-                            if seen { "\u{25cb}" } else { "\u{25cf}" }
-                        ),
-                        !seen,
-                    ),
+                    State::Done => (format!("{name}: your turn \u{00b7} {when}"), !seen),
                     State::Working => {
                         let took = if elapsed < 60 {
                             "just started".to_string()
                         } else {
                             span(elapsed)
                         };
-                        (
-                            format!("\u{2026}  {name} is working \u{00b7} {took}"),
-                            false,
-                        )
+                        (format!("{name} is working \u{00b7} {took}"), false)
                     }
-                    State::Ready => (format!("     {name}: ready"), false),
+                    State::Ready => (format!("{name}: ready"), false),
                 };
                 // Any row whose terminal is known can bring it forward.
                 let clickable = clickable || s.terminal.is_some();
-                (format!("{ID_SESSION}{}", s.id), label, clickable)
+                (
+                    format!("{ID_SESSION}{}", s.id),
+                    label,
+                    clickable,
+                    glyph,
+                    ink,
+                )
             })
             .collect()
+    }
+
+    fn glyph(&self, name: &str, ink: Ink) -> Option<MenuIcon> {
+        let (rgba, edge) = art::glyph(name, ink, self.dark_menus)?;
+        MenuIcon::from_rgba(rgba, edge, edge).ok()
     }
 
     fn rebuild_menu(&mut self, force: bool) {
@@ -544,12 +565,13 @@ impl App {
         let rows = self.rows();
         let autostart_on = autostart::is_enabled();
         let sig = format!(
-            "{header}|{rows:?}|{:?}{}{}{}{}{autostart_on}",
+            "{header}|{rows:?}|{:?}{}{}{}{}{autostart_on}{}",
             self.connected,
             self.cfg.notify_done,
             self.cfg.notify_needs_you,
             self.cfg.quiet_when_focused,
-            self.cfg.quiet_in_claude_desktop
+            self.cfg.quiet_in_claude_desktop,
+            self.dark_menus
         );
         // Rebuilding closes an open menu on some platforms, so only when
         // something on it actually changed.
@@ -570,19 +592,26 @@ impl App {
         let _ = menu.append(&MenuItem::with_id(ID_INERT, &header, false, None));
         if !rows.is_empty() {
             let _ = menu.append(&PredefinedMenuItem::separator());
-            for (id, label, clickable) in &rows {
+            for (id, label, clickable, glyph, ink) in &rows {
                 let id = if *clickable { id.as_str() } else { ID_INERT };
-                let _ = menu.append(&MenuItem::with_id(id, label, *clickable, None));
+                let _ = menu.append(&IconMenuItem::with_id(
+                    id,
+                    label,
+                    *clickable,
+                    self.glyph(glyph, *ink),
+                    None,
+                ));
             }
             let any_unseen = self.tracker.overall(&self.sessions) == Overall::NeedsYou
                 || self.tracker.overall(&self.sessions) == Overall::YourTurn;
             // Only when there is something to clear; a greyed-out row is noise.
             if any_unseen {
                 let _ = menu.append(&PredefinedMenuItem::separator());
-                let _ = menu.append(&MenuItem::with_id(
+                let _ = menu.append(&IconMenuItem::with_id(
                     ID_SEEN_ALL,
                     "Mark all as seen",
                     true,
+                    self.glyph("check-check", Ink::Text),
                     None,
                 ));
             }
@@ -644,23 +673,38 @@ impl App {
             None,
         ));
         if !rows.is_empty() {
-            let _ = settings.append(&MenuItem::with_id(
+            let _ = settings.append(&IconMenuItem::with_id(
                 ID_FORGET,
                 "Forget all sessions",
                 true,
+                self.glyph("eraser", Ink::Text),
                 None,
             ));
         }
-        let _ = settings.append(&MenuItem::with_id(
+        let _ = settings.append(&IconMenuItem::with_id(
             ID_EDIT,
             "Edit config file\u{2026}",
             true,
+            self.glyph("file-cog", Ink::Text),
+            shortcut(','),
+        ));
+        let _ = settings.append(&PredefinedMenuItem::separator());
+        let _ = settings.append(&MenuItem::with_id(
+            ID_INERT,
+            concat!("Sua Vez ", env!("CARGO_PKG_VERSION")),
+            false,
             None,
         ));
 
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&settings);
-        let _ = menu.append(&MenuItem::with_id(ID_QUIT, "Quit Sua Vez", true, None));
+        let _ = menu.append(&IconMenuItem::with_id(
+            ID_QUIT,
+            "Quit Sua Vez",
+            true,
+            self.glyph("power", Ink::Text),
+            shortcut('q'),
+        ));
 
         self.tray.set_menu(Some(Box::new(menu)));
     }
@@ -681,6 +725,21 @@ fn blocked_line(name: &str, message: &str) -> String {
         s.push('\u{2026}');
     }
     format!("{name}: {s}")
+}
+
+/// A menu shortcut, shown beside the item. Only on macOS, where menus
+/// customarily list them; Windows tray menus don't.
+fn shortcut(key: char) -> Option<Accelerator> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+    use tray_icon::menu::accelerator::{Code, Modifiers};
+    let code = match key {
+        'q' => Code::KeyQ,
+        ',' => Code::Comma,
+        _ => return None,
+    };
+    Some(Accelerator::new(Some(Modifiers::SUPER), code))
 }
 
 /// Whether the tray menu is open right now. On macOS the run loop is in event

@@ -12,6 +12,7 @@
 //! | `hooks`           | Sua Vez's entries in each agent's hooks config       |
 //! | `config`          | the persisted preferences                            |
 //! | `icon`            | draws the bubble                                     |
+//! | `art`             | the menu's icons, from Lucide                        |
 //! | `notify`          | toasts                                               |
 //! | `app`             | the tray icon and its menu                           |
 //! | `single_instance` | one copy at a time; relaunch and hook pokes          |
@@ -24,6 +25,7 @@
 
 mod agent;
 mod app;
+mod art;
 mod autostart;
 mod config;
 mod hooks;
