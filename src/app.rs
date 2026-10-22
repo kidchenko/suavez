@@ -12,12 +12,12 @@ use crate::icon::{self, Face};
 use crate::log::{lerror, linfo, lwarn};
 use crate::session::{self, Overall, Rules, Session, State, Tracker};
 use crate::single_instance::Msg;
-use crate::util::{ago, now_unix, span};
+use crate::util::{ago, now_unix, running_from_temporary_place, span};
 use crate::{autostart, hooks, notify, terminal, theme, wezterm};
 
 use std::time::{Duration, Instant, SystemTime};
 use tao::event_loop::EventLoopProxy;
-use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 const ID_SESSION: &str = "s:";
@@ -98,12 +98,21 @@ impl App {
             menu_sig: String::new(),
             cfg_mtime: Config::modified(),
         };
-        app.connect_new_agents();
-        for i in hooks::installed() {
-            match i.repoint() {
-                Ok(true) => linfo!("{} hooks brought up to date", i.agent.slug()),
-                Ok(false) => {}
-                Err(e) => lwarn!("could not check the {} hooks: {e}", i.agent.slug()),
+        if running_from_temporary_place() {
+            lwarn!("running from a disk image or translocated; not touching any hooks");
+            notify::show(
+                "Move Sua Vez to Applications",
+                "It's running from the disk image, so it hasn't connected to your agents.",
+                Some("Drag it into Applications and open it from there."),
+            );
+        } else {
+            app.connect_new_agents();
+            for i in hooks::installed() {
+                match i.repoint() {
+                    Ok(true) => linfo!("{} hooks brought up to date", i.agent.slug()),
+                    Ok(false) => {}
+                    Err(e) => lwarn!("could not check the {} hooks: {e}", i.agent.slug()),
+                }
             }
         }
         app.refresh_connections();
@@ -117,6 +126,9 @@ impl App {
     /// the tick as well, so an agent installed later is picked up without a
     /// restart.
     fn connect_new_agents(&mut self) {
+        if running_from_temporary_place() {
+            return;
+        }
         for i in &hooks::INTEGRATIONS {
             if self.cfg.offered.contains(&i.agent) || !i.available() {
                 continue;
@@ -330,6 +342,14 @@ impl App {
     fn toggle_connection(&mut self, agent: Agent) {
         let Some(i) = hooks::get(agent) else { return };
         let was = self.connected.contains(&agent);
+        if !was && running_from_temporary_place() {
+            notify::show(
+                "Move Sua Vez to Applications first",
+                "Connected from the disk image, the hooks would break once it's ejected.",
+                None,
+            );
+            return;
+        }
         let result = if was { i.uninstall() } else { i.install() };
         self.refresh_connections();
         match result {
@@ -536,50 +556,43 @@ impl App {
             }
             let any_unseen = self.tracker.overall(&self.sessions) == Overall::NeedsYou
                 || self.tracker.overall(&self.sessions) == Overall::YourTurn;
-            let _ = menu.append(&PredefinedMenuItem::separator());
-            let _ = menu.append(&MenuItem::with_id(
-                ID_SEEN_ALL,
-                "Mark all as seen",
-                any_unseen,
-                None,
-            ));
-            let _ = menu.append(&MenuItem::with_id(
-                ID_FORGET,
-                "Forget all sessions",
-                true,
-                None,
-            ));
+            // Only when there is something to clear; a greyed-out row is noise.
+            if any_unseen {
+                let _ = menu.append(&PredefinedMenuItem::separator());
+                let _ = menu.append(&MenuItem::with_id(
+                    ID_SEEN_ALL,
+                    "Mark all as seen",
+                    true,
+                    None,
+                ));
+            }
         }
 
-        let _ = menu.append(&PredefinedMenuItem::separator());
-        let _ = menu.append(&CheckMenuItem::with_id(
+        // Everything you set once and leave goes one level down, so the top
+        // level is just the sessions.
+        let settings = Submenu::new("Settings", true);
+        let _ = settings.append(&CheckMenuItem::with_id(
             ID_NOTIFY_DONE,
             "Notify when it's your turn",
             true,
             self.cfg.notify_done,
             None,
         ));
-        let _ = menu.append(&CheckMenuItem::with_id(
+        let _ = settings.append(&CheckMenuItem::with_id(
             ID_NOTIFY_NEEDS,
             "Notify when an agent needs you",
             true,
             self.cfg.notify_needs_you,
             None,
         ));
-        let _ = menu.append(&CheckMenuItem::with_id(
+        let _ = settings.append(&CheckMenuItem::with_id(
             ID_QUIET_FOCUSED,
             "Quiet while its terminal is in front",
             true,
             self.cfg.quiet_when_focused,
             None,
         ));
-        let _ = menu.append(&MenuItem::with_id(
-            ID_EDIT,
-            "Edit settings\u{2026}",
-            true,
-            None,
-        ));
-        let _ = menu.append(&PredefinedMenuItem::separator());
+        let _ = settings.append(&PredefinedMenuItem::separator());
         // One toggle per agent that is installed, or that is connected even
         // though its folder has gone (so the hooks can still be taken out).
         for i in &hooks::INTEGRATIONS {
@@ -587,7 +600,7 @@ impl App {
             if !on && !i.available() {
                 continue;
             }
-            let _ = menu.append(&CheckMenuItem::with_id(
+            let _ = settings.append(&CheckMenuItem::with_id(
                 format!("{ID_CONNECT}{}", i.agent.slug()),
                 format!("Connect to {}", i.label()),
                 true,
@@ -595,14 +608,31 @@ impl App {
                 None,
             ));
         }
-        let _ = menu.append(&CheckMenuItem::with_id(
+        let _ = settings.append(&PredefinedMenuItem::separator());
+        let _ = settings.append(&CheckMenuItem::with_id(
             ID_AUTOSTART,
             "Run at login",
             true,
             autostart_on,
             None,
         ));
+        if !rows.is_empty() {
+            let _ = settings.append(&MenuItem::with_id(
+                ID_FORGET,
+                "Forget all sessions",
+                true,
+                None,
+            ));
+        }
+        let _ = settings.append(&MenuItem::with_id(
+            ID_EDIT,
+            "Edit config file\u{2026}",
+            true,
+            None,
+        ));
+
         let _ = menu.append(&PredefinedMenuItem::separator());
+        let _ = menu.append(&settings);
         let _ = menu.append(&MenuItem::with_id(ID_QUIT, "Quit Sua Vez", true, None));
 
         self.tray.set_menu(Some(Box::new(menu)));

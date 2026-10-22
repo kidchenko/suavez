@@ -31,6 +31,23 @@ pub fn ago(secs: u64) -> String {
     }
 }
 
+/// Whether this copy runs from somewhere that won't last: the mounted disk
+/// image, or the random folder Gatekeeper runs a quarantined app from (App
+/// Translocation). Hooks pointed here break the moment the image is ejected
+/// or the app relaunched, so nothing should be connected from it.
+pub fn running_from_temporary_place() -> bool {
+    if !cfg!(target_os = "macos") {
+        return false;
+    }
+    std::env::current_exe()
+        .map(|p| is_temporary_place(&p.to_string_lossy()))
+        .unwrap_or(false)
+}
+
+fn is_temporary_place(exe: &str) -> bool {
+    exe.starts_with("/Volumes/") || exe.contains("/AppTranslocation/")
+}
+
 /// Full path to the running executable, quoted for the Run key.
 #[cfg(windows)]
 pub fn exe_path_quoted() -> Option<String> {
@@ -81,5 +98,18 @@ mod tests {
         assert_eq!(span(3600 + 5 * 60), "1h 05m");
         assert_eq!(ago(30), "just now");
         assert_eq!(ago(600), "10m ago");
+    }
+
+    #[test]
+    fn temporary_places() {
+        assert!(is_temporary_place(
+            "/Volumes/SuaVez/SuaVez.app/Contents/MacOS/suavez"
+        ));
+        assert!(is_temporary_place(
+            "/private/var/folders/x/T/AppTranslocation/1234/d/SuaVez.app/Contents/MacOS/suavez"
+        ));
+        assert!(!is_temporary_place(
+            "/Applications/SuaVez.app/Contents/MacOS/suavez"
+        ));
     }
 }
