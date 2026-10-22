@@ -11,19 +11,21 @@ cask "suavez" do
   desc "Menu bar icon that lights up when a coding agent finishes or needs you"
   homepage "https://github.com/kidchenko/suavez"
 
-  depends_on macos: ">= :big_sur"
+  depends_on :macos
 
   app "SuaVez.app"
 
   # Ad-hoc signed, not notarized: without this, Gatekeeper refuses to open it.
-  postflight do
-    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/SuaVez.app"]
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args:           ["-dr", "com.apple.quarantine", "{{appdir}}/SuaVez.app"],
+        writable_paths: ["{{appdir}}/SuaVez.app"]
   end
 
   # Take the hooks out of every agent's settings before the binary goes.
   # Left behind, every agent turn would try to run a missing file.
-  uninstall quit:      "com.kidchenko.suavez",
-            launchctl: "com.kidchenko.suavez",
+  uninstall launchctl: "com.kidchenko.suavez",
+            quit:      "com.kidchenko.suavez",
             script:    {
               executable:   "#{appdir}/SuaVez.app/Contents/MacOS/suavez",
               args:         ["uninstall"],
