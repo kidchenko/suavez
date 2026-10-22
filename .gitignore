@@ -1,0 +1,8 @@
+/target
+/dist
+*.pdb
+*.rgba
+.DS_Store
+.vscode/
+.idea/
+.claude/settings.local.json

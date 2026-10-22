@@ -1,0 +1,55 @@
+[package]
+name         = "suavez"
+version      = "0.0.1"
+edition      = "2021"
+rust-version = "1.77"
+description  = "Your turn: a tray icon that lights up when Claude Code finishes or needs you"
+authors      = ["kidchenko <kidchenko@gmail.com>"]
+license      = "MIT"
+repository   = "https://github.com/kidchenko/suavez"
+
+[[bin]]
+name = "suavez"
+path = "src/main.rs"
+
+[dependencies]
+serde      = { version = "1", features = ["derive"] }
+# `preserve_order` because Sua Vez edits ~/.claude/settings.json, which belongs
+# to the user: adding hooks must not also re-sort every key they wrote.
+serde_json = { version = "1", features = ["preserve_order"] }
+tao        = "0.37"
+tray-icon  = "0.24"
+
+# ---------------------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------------------
+[target.'cfg(windows)'.dependencies]
+tauri-winrt-notification = "0.8"
+
+[target.'cfg(windows)'.dependencies.windows]
+version  = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Console",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+]
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# `libc` is for localtime_r in the log stamp. Everything else is std.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level     = "z"
+lto           = true
+codegen-units = 1
+panic         = "abort"
+strip         = true
