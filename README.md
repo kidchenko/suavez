@@ -58,16 +58,20 @@ tab a session is in, so Sua Vez finds the app instead: with several tabs in one
 Windows Terminal window you get that window, and with two VS Code windows you
 get the one that was in front last.
 
+**Mark all as seen**, below the sessions, clears the colour from every
+finished or blocked session. It's only there when something is coloured.
+
+Everything you set once lives under **Settings ▸**:
+
 | | |
 |---|---|
-| **Mark all as seen** | Clears the colour from every finished or blocked session. |
-| **Forget all sessions** | For a session stuck on "working" after a terminal crashed. Live sessions come back with their next event. |
 | **Notify when it's your turn** | A notification when a turn ends. |
 | **Notify when an agent needs you** | A notification when an agent is blocked on you. |
 | **Quiet while its terminal is in front** | No notification while you're already in the session's terminal (in WezTerm, its pane). On by default. |
-| **Edit settings…** | Opens `config.json`. [See below.](#configuration) |
 | **Connect to …** | One per installed agent. Adds or removes Sua Vez's hooks in that agent's settings. |
 | **Run at login** | Per-user, no admin. |
+| **Forget all sessions** | For a session stuck on "working" after a terminal crashed. Live sessions come back with their next event. |
+| **Edit config file…** | Opens `config.json`. [See below.](#configuration) |
 
 ### When it notifies
 
@@ -93,15 +97,12 @@ tell you which sessions are waiting.
 
 ### Windows
 
-```powershell
-winget install kidchenko.SuaVez
-# or
-choco install suavez
-```
-
-Or grab [**SuaVez-Setup.exe**](https://github.com/kidchenko/suavez/releases/latest/download/SuaVez-Setup.exe)
-directly. Each release also ships a portable `suavez-x.y.z-x64.exe` that runs
+Download [**SuaVez-Setup.exe**](https://github.com/kidchenko/suavez/releases/latest/download/SuaVez-Setup.exe)
+and run it. Each release also ships a portable `suavez-x.y.z-x64.exe` that runs
 without installing; see [Releases](https://github.com/kidchenko/suavez/releases).
+
+`winget install kidchenko.SuaVez` and `choco install suavez` are coming: both
+packages are waiting on review.
 
 The binary isn't code-signed, so SmartScreen warns on first run: click **More
 info → Run anyway**.

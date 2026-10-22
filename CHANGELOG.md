@@ -1,8 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.0.1] - 2026-10-22
 
-First release, planned as 0.0.1.
+First release.
 
 - Tray app for Windows and macOS: a speech bubble that shows dots while a
   coding agent works, turns green when it finishes, and turns amber when it's
@@ -16,10 +16,13 @@ First release, planned as 0.0.1.
 - A menu listing every open session by project folder, most urgent first.
   Clicking a session, or on Windows its notification, brings its terminal to
   the front and marks it as seen. In WezTerm it switches to the session's tab.
+  Preferences sit one level down, under Settings.
 - Connects to each agent the first time it finds it installed, by adding hooks
   to that agent's settings and keeping everything else in the file as it was.
   Devin rides on Claude Code's hooks. One "Connect to …" toggle per agent, or
   `suavez install [agent]` / `uninstall [agent]`.
+  On macOS it waits until it runs from Applications rather than the disk
+  image, so the hooks never point at a file that disappears on eject.
 - `suavez status` prints the connections and what every session is doing.
 - Run at login.
 - Windows installer (Inno Setup), Chocolatey and winget manifests, a universal

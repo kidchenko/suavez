@@ -231,7 +231,7 @@
     <a class="download dl-win" href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez-Setup.exe">Download for Windows</a>
     <a class="download ghost dl-mac" href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez.dmg">Download for macOS</a>
   </div>
-  <p class="alt for-win">or <code>winget install kidchenko.SuaVez</code> &nbsp;·&nbsp; <code>choco install suavez</code></p>
+  <p class="alt for-win">winget and Chocolatey packages are coming soon</p>
   <p class="alt for-mac">or <code>brew install --cask kidchenko/tap/suavez</code></p>
 </header>
 
@@ -242,19 +242,12 @@
     <button class="row" id="row-cota" role="menuitem" disabled><span class="mark" id="mark-cota"></span><span id="text-cota">cota: ready</span><span class="when" id="when-cota"></span></button>
     <div class="row"><span class="mark">…</span><span>porta (Codex) is working</span><span class="when">3m</span></div>
     <div class="row"><span class="mark">…</span><span>presence-sync (Gemini) is working</span><span class="when">6m</span></div>
+    <div id="seen-group" hidden>
+      <div class="sep"></div>
+      <button class="row" id="seen-all" role="menuitem"><span></span><span>Mark all as seen</span><span></span></button>
+    </div>
     <div class="sep"></div>
-    <button class="row" id="seen-all" role="menuitem" disabled><span></span><span>Mark all as seen</span><span></span></button>
-    <div class="row"><span></span><span>Forget all sessions</span><span></span></div>
-    <div class="sep"></div>
-    <div class="row on"><span class="chk">✓</span><span>Notify when it's your turn</span><span></span></div>
-    <div class="row on"><span class="chk">✓</span><span>Notify when an agent needs you</span><span></span></div>
-    <div class="row"><span></span><span>Edit settings…</span><span></span></div>
-    <div class="sep"></div>
-    <div class="row on"><span class="chk">✓</span><span>Connect to Claude Code and Devin</span><span></span></div>
-    <div class="row on"><span class="chk">✓</span><span>Connect to Codex</span><span></span></div>
-    <div class="row on"><span class="chk">✓</span><span>Connect to Gemini CLI</span><span></span></div>
-    <div class="row on"><span class="chk">✓</span><span>Run at login</span><span></span></div>
-    <div class="sep"></div>
+    <div class="row"><span></span><span>Settings</span><span class="when">›</span></div>
     <div class="row"><span></span><span>Quit Sua Vez</span><span></span></div>
   </div>
 
@@ -315,8 +308,8 @@
     <h2>Install</h2>
     <table>
       <tr><td>Windows installer</td><td><a href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez-Setup.exe">SuaVez-Setup.exe</a></td></tr>
-      <tr><td>winget</td><td><code>winget install kidchenko.SuaVez</code></td></tr>
-      <tr><td>Chocolatey</td><td><code>choco install suavez</code></td></tr>
+      <tr><td>winget</td><td>coming soon</td></tr>
+      <tr><td>Chocolatey</td><td>coming soon</td></tr>
       <tr><td>macOS</td><td><a href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez.dmg">SuaVez.dmg</a> (Apple silicon and Intel)</td></tr>
       <tr><td>Homebrew</td><td><code>brew install --cask kidchenko/tap/suavez</code></td></tr>
     </table>
@@ -345,7 +338,7 @@
   (function () {
     var $ = function (id) { return document.getElementById(id); };
     var row = $("row-cota"), mark = $("mark-cota"), text = $("text-cota"), when = $("when-cota");
-    var header = $("header"), bubble = $("bubble"), seenAll = $("seen-all");
+    var header = $("header"), bubble = $("bubble"), seenAll = $("seen-all"), seenGroup = $("seen-group");
     var play = $("play"), allow = $("allow"), hint = $("hint");
     var toast = $("toast"), toastTimer = null, stepTimer = null;
     var state = "ready", seen = false;
@@ -366,7 +359,7 @@
       var unseen = wants && !seen;
       row.className = "row" + (state === "needs" ? " needs" : state === "done" ? " turn" : "");
       row.disabled = !unseen;
-      seenAll.disabled = !unseen;
+      seenGroup.hidden = !unseen;
       mark.textContent = { ready: "", working: "…", needs: seen ? "○" : "⚠", done: seen ? "○" : "●" }[state];
       text.textContent = {
         ready: "cota: ready",
