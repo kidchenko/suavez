@@ -10,7 +10,8 @@ First release, planned as 0.0.1.
 - Works with Claude Code, Codex, Gemini CLI and Devin. Sessions from all of
   them share one menu, labelled with the agent.
 - Notifications when an agent finishes or needs you. Turns under 30 seconds and
-  prompts answered within 8 seconds stay quiet; both are adjustable.
+  prompts answered within 8 seconds stay quiet, and so does anything from the
+  terminal you're already in. All three are adjustable.
 - A menu listing every open session by project folder, most urgent first.
   Clicking a session brings its terminal to the front and marks it as seen.
 - Connects to each agent the first time it finds it installed, by adding hooks

@@ -23,6 +23,9 @@ pub struct Config {
     /// A permission prompt answered within this many seconds does not notify
     /// either, for the same reason.
     pub grace_seconds: u64,
+    /// No notification while the session's terminal is the app in front: you
+    /// are looking at it. The bubble still turns.
+    pub quiet_when_focused: bool,
     /// Sessions that have not reported anything for this long are dropped.
     /// Covers a terminal closed without Claude Code getting to say goodbye.
     pub stale_hours: u64,
@@ -42,6 +45,7 @@ impl Default for Config {
             notify_needs_you: true,
             min_turn_seconds: 30,
             grace_seconds: 8,
+            quiet_when_focused: true,
             stale_hours: 8,
             hooks_offered: false,
             offered: Vec::new(),

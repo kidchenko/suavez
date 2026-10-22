@@ -370,6 +370,8 @@ pub struct Rules {
     pub notify_needs_you: bool,
     pub min_turn_secs: u64,
     pub grace_secs: u64,
+    /// No notification while the session's terminal is the app in front.
+    pub quiet_when_focused: bool,
 }
 
 #[derive(Default)]
@@ -388,7 +390,19 @@ impl Tracker {
     /// The first snapshot after launch announces nothing: those finishes
     /// happened while nobody was listening, and a burst of stale toasts at
     /// login helps no one. They still colour the icon until seen.
-    pub fn update(&mut self, sessions: &[Session], now: u64, rules: &Rules) -> Vec<Toast> {
+    ///
+    /// `in_front` says whether a session's terminal is the app you are using.
+    /// It is only asked at the moment a notification would go out. When it says
+    /// yes, the notification is skipped but the bubble still turns: the app is
+    /// in front, but the finish may be in a tab you are not looking at.
+    pub fn update(
+        &mut self,
+        sessions: &[Session],
+        now: u64,
+        rules: &Rules,
+        in_front: &dyn Fn(&Session) -> bool,
+    ) -> Vec<Toast> {
+        let watching = |s: &Session| rules.quiet_when_focused && in_front(s);
         let live: HashSet<(String, u64)> = sessions.iter().map(Session::episode).collect();
         self.announced.retain(|k| live.contains(k));
         self.seen.retain(|k| live.contains(k));
@@ -408,7 +422,7 @@ impl Tracker {
             let name = &names[&s.id];
             match s.state {
                 State::Done => {
-                    if rules.notify_done && s.turn_secs() >= rules.min_turn_secs {
+                    if rules.notify_done && s.turn_secs() >= rules.min_turn_secs && !watching(s) {
                         toasts.push(Toast {
                             title: format!("Your turn in {name}"),
                             body: format!(
@@ -426,7 +440,7 @@ impl Tracker {
                     if now.saturating_sub(s.since) < rules.grace_secs {
                         continue;
                     }
-                    if rules.notify_needs_you {
+                    if rules.notify_needs_you && !watching(s) {
                         toasts.push(Toast {
                             title: format!("{name} needs you"),
                             body: if s.message.is_empty() {
@@ -532,6 +546,7 @@ mod tests {
         notify_needs_you: true,
         min_turn_secs: 30,
         grace_secs: 8,
+        quiet_when_focused: true,
     };
 
     #[test]
@@ -665,27 +680,55 @@ mod tests {
     #[test]
     fn first_snapshot_is_quiet_then_finishes_toast_once() {
         let mut t = Tracker::default();
-        assert!(t.update(&[done("old", 60, 100)], 100, &RULES).is_empty());
+        assert!(t
+            .update(&[done("old", 60, 100)], 100, &RULES, &|_| false)
+            .is_empty());
         assert_eq!(t.overall(&[done("old", 60, 100)]), Overall::YourTurn);
 
         let now = [done("old", 60, 100), done("cafe", 120, 200)];
-        let toasts = t.update(&now, 200, &RULES);
+        let toasts = t.update(&now, 200, &RULES, &|_| false);
         assert_eq!(toasts.len(), 1);
         assert_eq!(toasts[0].title, "Your turn in cafe");
-        assert!(t.update(&now, 210, &RULES).is_empty(), "no repeats");
+        assert!(
+            t.update(&now, 210, &RULES, &|_| false).is_empty(),
+            "no repeats"
+        );
+    }
+
+    #[test]
+    fn no_toast_for_the_terminal_you_are_in_but_the_bubble_still_turns() {
+        let mut t = Tracker::default();
+        t.update(&[], 0, &RULES, &|_| false);
+        let a = done("a", 60, 100);
+        let toasts = t.update(std::slice::from_ref(&a), 100, &RULES, &|_| true);
+        assert!(toasts.is_empty());
+        assert_eq!(t.overall(&[a]), Overall::YourTurn);
+
+        let loud = Rules {
+            quiet_when_focused: false,
+            ..RULES
+        };
+        let mut t = Tracker::default();
+        t.update(&[], 0, &loud, &|_| false);
+        assert_eq!(
+            t.update(&[done("b", 60, 100)], 100, &loud, &|_| true).len(),
+            1
+        );
     }
 
     #[test]
     fn quick_turns_do_not_toast() {
         let mut t = Tracker::default();
-        t.update(&[], 0, &RULES);
-        assert!(t.update(&[done("a", 5, 100)], 100, &RULES).is_empty());
+        t.update(&[], 0, &RULES, &|_| false);
+        assert!(t
+            .update(&[done("a", 5, 100)], 100, &RULES, &|_| false)
+            .is_empty());
     }
 
     #[test]
     fn permission_prompts_wait_out_the_grace_period() {
         let mut t = Tracker::default();
-        t.update(&[], 0, &RULES);
+        t.update(&[], 0, &RULES, &|_| false);
         let s = Session {
             id: "a".into(),
             state: State::NeedsYou,
@@ -693,9 +736,15 @@ mod tests {
             updated: 100,
             ..Session::default()
         };
-        assert!(t.update(std::slice::from_ref(&s), 103, &RULES).is_empty());
+        assert!(t
+            .update(std::slice::from_ref(&s), 103, &RULES, &|_| false)
+            .is_empty());
         assert_eq!(t.next_due(std::slice::from_ref(&s), &RULES), Some(108));
-        assert_eq!(t.update(std::slice::from_ref(&s), 108, &RULES).len(), 1);
+        assert_eq!(
+            t.update(std::slice::from_ref(&s), 108, &RULES, &|_| false)
+                .len(),
+            1
+        );
         assert_eq!(t.next_due(std::slice::from_ref(&s), &RULES), None);
     }
 
@@ -703,11 +752,11 @@ mod tests {
     fn seen_clears_the_colour_until_the_next_finish() {
         let mut t = Tracker::default();
         let a = done("a", 60, 100);
-        t.update(std::slice::from_ref(&a), 100, &RULES);
+        t.update(std::slice::from_ref(&a), 100, &RULES, &|_| false);
         t.mark_seen(&a);
         assert_eq!(t.overall(std::slice::from_ref(&a)), Overall::Idle);
         let again = done("a", 60, 300);
-        t.update(std::slice::from_ref(&again), 300, &RULES);
+        t.update(std::slice::from_ref(&again), 300, &RULES, &|_| false);
         assert_eq!(t.overall(&[again]), Overall::YourTurn);
     }
 

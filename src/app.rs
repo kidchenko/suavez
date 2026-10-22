@@ -24,6 +24,7 @@ const ID_SESSION: &str = "s:";
 const ID_SEEN_ALL: &str = "seen-all";
 const ID_NOTIFY_DONE: &str = "notify-done";
 const ID_NOTIFY_NEEDS: &str = "notify-needs";
+const ID_QUIET_FOCUSED: &str = "quiet-focused";
 const ID_CONNECT: &str = "connect:";
 const ID_FORGET: &str = "forget";
 const ID_EDIT: &str = "edit-config";
@@ -176,6 +177,10 @@ impl App {
                 self.cfg.notify_needs_you = !self.cfg.notify_needs_you;
                 self.save();
             }
+            ID_QUIET_FOCUSED => {
+                self.cfg.quiet_when_focused = !self.cfg.quiet_when_focused;
+                self.save();
+            }
             ID_FORGET => {
                 linfo!("forgetting all sessions");
                 session::remove_all();
@@ -239,6 +244,7 @@ impl App {
             notify_needs_you: self.cfg.notify_needs_you,
             min_turn_secs: self.cfg.min_turn_seconds,
             grace_secs: self.cfg.grace_seconds,
+            quiet_when_focused: self.cfg.quiet_when_focused,
         }
     }
 
@@ -259,7 +265,14 @@ impl App {
             linfo!("sessions: {after:?}");
         }
         let rules = self.rules();
-        for t in self.tracker.update(&self.sessions, now, &rules) {
+        let in_front = |s: &Session| {
+            let front = s.terminal.as_ref().is_some_and(terminal::in_front);
+            if front {
+                linfo!("no notification for {}: its terminal is in front", s.id);
+            }
+            front
+        };
+        for t in self.tracker.update(&self.sessions, now, &rules, &in_front) {
             notify::show(&t.title, &t.body, None);
         }
         self.repaint(false);
@@ -457,8 +470,11 @@ impl App {
         let rows = self.rows();
         let autostart_on = autostart::is_enabled();
         let sig = format!(
-            "{header}|{rows:?}|{:?}{}{}{autostart_on}",
-            self.connected, self.cfg.notify_done, self.cfg.notify_needs_you
+            "{header}|{rows:?}|{:?}{}{}{}{autostart_on}",
+            self.connected,
+            self.cfg.notify_done,
+            self.cfg.notify_needs_you,
+            self.cfg.quiet_when_focused
         );
         // Rebuilding closes an open menu on some platforms, so only when
         // something on it actually changed.
@@ -506,6 +522,13 @@ impl App {
             "Notify when an agent needs you",
             true,
             self.cfg.notify_needs_you,
+            None,
+        ));
+        let _ = menu.append(&CheckMenuItem::with_id(
+            ID_QUIET_FOCUSED,
+            "Quiet while its terminal is in front",
+            true,
+            self.cfg.quiet_when_focused,
             None,
         ));
         let _ = menu.append(&MenuItem::with_id(

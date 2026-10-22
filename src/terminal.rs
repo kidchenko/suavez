@@ -22,7 +22,7 @@ pub struct Terminal {
     pub name: String,
 }
 
-pub use imp::{detect, focus};
+pub use imp::{detect, focus, in_front};
 
 /// Walk up from `start` through `parents` (pid → (parent pid, name)) and
 /// return the first ancestor `is_app` accepts. Stops at `stop` names, which are
@@ -77,8 +77,9 @@ mod imp {
         VK_MENU,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetWindow, GetWindowTextLengthW, GetWindowThreadProcessId, IsIconic,
-        IsWindowVisible, SetForegroundWindow, ShowWindow, GW_OWNER, SW_RESTORE,
+        EnumWindows, GetForegroundWindow, GetWindow, GetWindowTextLengthW,
+        GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow, ShowWindow,
+        GW_OWNER, SW_RESTORE,
     };
 
     /// Where the chain has left the terminal behind.
@@ -145,6 +146,19 @@ mod imp {
         let start = parents.get(&me)?.0;
         walk(&parents, start, STOP, |pid, _| windowed.contains(&pid))
             .map(|(pid, name)| Terminal { pid, name })
+    }
+
+    /// Whether the window you are typing into belongs to `t`.
+    pub fn in_front(t: &Terminal) -> bool {
+        let hwnd = unsafe { GetForegroundWindow() };
+        if hwnd.is_invalid() {
+            return false;
+        }
+        let mut pid = 0u32;
+        unsafe {
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        }
+        pid == t.pid
     }
 
     pub fn focus(t: &Terminal) -> Result<(), String> {
@@ -238,6 +252,24 @@ mod imp {
             pid,
             name: outer_bundle(&name).unwrap_or(&name).to_string(),
         })
+    }
+
+    /// Whether the frontmost app is `t`'s bundle. `lsappinfo` answers without
+    /// the Accessibility permission that asking System Events would need.
+    pub fn in_front(t: &Terminal) -> bool {
+        let run = |args: &[&str]| {
+            std::process::Command::new("/usr/bin/lsappinfo")
+                .args(args)
+                .output()
+                .ok()
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        };
+        let Some(asn) = run(&["front"]).filter(|a| !a.is_empty()) else {
+            return false;
+        };
+        run(&["info", "-only", "bundlepath", &asn])
+            .map(|info| info.contains(&format!("\"{}\"", t.name)))
+            .unwrap_or(false)
     }
 
     pub fn focus(t: &Terminal) -> Result<(), String> {

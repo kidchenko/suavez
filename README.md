@@ -62,6 +62,7 @@ was in front last.
 | **Forget all sessions** | For a session stuck on "working" after a terminal crashed. Live sessions come back with their next event. |
 | **Notify when it's your turn** | A notification when a turn ends. |
 | **Notify when an agent needs you** | A notification when an agent is blocked on you. |
+| **Quiet while its terminal is in front** | No notification while you're already in the session's terminal. On by default. |
 | **Edit settings…** | Opens `config.json`. [See below.](#configuration) |
 | **Connect to …** | One per installed agent. Adds or removes Sua Vez's hooks in that agent's settings. |
 | **Run at login** | Per-user, no admin. |
@@ -74,8 +75,11 @@ terminal anyway, so two rules keep it quiet:
 - A turn that ends in under 30 seconds doesn't notify. You were almost
   certainly still looking.
 - A permission prompt you answer within 8 seconds doesn't notify either.
+- Nothing notifies while the session's terminal is the app in front. The bubble
+  still turns, because Sua Vez can tell which app you're in but not which tab,
+  and the finish may be in a tab you aren't looking at.
 
-Both are adjustable. Sessions that finished before Sua Vez started still turn
+All three are adjustable. Sessions that finished before Sua Vez started still turn
 the bubble green, but they don't send a burst of old notifications.
 
 Running `suavez` again while it's already in the tray makes the running copy
@@ -203,6 +207,7 @@ location.
   "notifyNeedsYou": true,
   "minTurnSeconds": 30,
   "graceSeconds": 8,
+  "quietWhenFocused": true,
   "staleHours": 8,
   "offered": ["claude", "codex"]
 }
@@ -212,6 +217,7 @@ location.
 |---|---|
 | `minTurnSeconds` | Turns shorter than this don't notify when they end. `0` notifies every time. |
 | `graceSeconds` | How long a permission prompt waits before it notifies. |
+| `quietWhenFocused` | Skip notifications while the session's terminal is in front. |
 | `staleHours` | Sessions quiet for this long are dropped. |
 | `offered` | Agents Sua Vez has already connected to by itself, so disconnecting one stays disconnected. |
 
