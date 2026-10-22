@@ -17,6 +17,7 @@
 //! | `single_instance` | one copy at a time; relaunch and hook pokes          |
 //! | `autostart`       | run at login                                         |
 //! | `terminal`        | finds a session's terminal and brings it forward     |
+//! | `wezterm`         | which WezTerm pane has focus, for quiet-when-in-front |
 //!
 //! The same binary is the hook: the agent runs `suavez hook` with the event on
 //! stdin, and that process updates a file and pokes the tray.
@@ -34,6 +35,7 @@ mod single_instance;
 mod terminal;
 mod theme;
 mod util;
+mod wezterm;
 
 use agent::Agent;
 use app::{App, Flow, UserEvent};

@@ -13,7 +13,7 @@ use crate::log::{lerror, linfo, lwarn};
 use crate::session::{self, Overall, Rules, Session, State, Tracker};
 use crate::single_instance::Msg;
 use crate::util::{ago, now_unix, span};
-use crate::{autostart, hooks, notify, terminal, theme};
+use crate::{autostart, hooks, notify, terminal, theme, wezterm};
 
 use std::time::{Duration, Instant, SystemTime};
 use tao::event_loop::EventLoopProxy;
@@ -265,10 +265,19 @@ impl App {
             linfo!("sessions: {after:?}");
         }
         let rules = self.rules();
+        // Its terminal app has to be in front, and for WezTerm, its own pane:
+        // a finish in another tab still notifies. If WezTerm can't be asked,
+        // the app being in front is the best we know.
         let in_front = |s: &Session| {
-            let front = s.terminal.as_ref().is_some_and(terminal::in_front);
+            if !s.terminal.as_ref().is_some_and(terminal::in_front) {
+                return false;
+            }
+            let front = match &s.pane {
+                Some(p) => wezterm::is_focused(p).unwrap_or(true),
+                None => true,
+            };
             if front {
-                linfo!("no notification for {}: its terminal is in front", s.id);
+                linfo!("no notification for {}: you're in its terminal", s.id);
             }
             front
         };

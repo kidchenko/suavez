@@ -62,7 +62,7 @@ was in front last.
 | **Forget all sessions** | For a session stuck on "working" after a terminal crashed. Live sessions come back with their next event. |
 | **Notify when it's your turn** | A notification when a turn ends. |
 | **Notify when an agent needs you** | A notification when an agent is blocked on you. |
-| **Quiet while its terminal is in front** | No notification while you're already in the session's terminal. On by default. |
+| **Quiet while its terminal is in front** | No notification while you're already in the session's terminal (in WezTerm, its pane). On by default. |
 | **Edit settings…** | Opens `config.json`. [See below.](#configuration) |
 | **Connect to …** | One per installed agent. Adds or removes Sua Vez's hooks in that agent's settings. |
 | **Run at login** | Per-user, no admin. |
@@ -75,9 +75,11 @@ terminal anyway, so two rules keep it quiet:
 - A turn that ends in under 30 seconds doesn't notify. You were almost
   certainly still looking.
 - A permission prompt you answer within 8 seconds doesn't notify either.
-- Nothing notifies while the session's terminal is the app in front. The bubble
-  still turns, because Sua Vez can tell which app you're in but not which tab,
-  and the finish may be in a tab you aren't looking at.
+- Nothing notifies while you're in the session's terminal. In WezTerm that
+  means the session's own pane: a session finishing in another tab still
+  notifies. In other terminals Sua Vez can only tell which app you're in, not
+  which tab, so it stays quiet for the whole app and the bubble still turns, in
+  case the finish is in a tab you aren't looking at.
 
 All three are adjustable. Sessions that finished before Sua Vez started still turn
 the bubble green, but they don't send a burst of old notifications.

@@ -60,6 +60,8 @@ pub struct Session {
     pub message: String,
     /// The app the session runs in, for bringing it to the front.
     pub terminal: Option<crate::terminal::Terminal>,
+    /// The WezTerm pane the session runs in, when it runs in WezTerm.
+    pub pane: Option<crate::wezterm::Pane>,
     /// Whether the hook has looked for `terminal` yet. It looks once per
     /// session: a miss would only miss again, and the walk is not free.
     pub terminal_checked: bool,
@@ -276,6 +278,11 @@ pub fn ingest(stdin: &str, agent: Agent, now: u64) -> Result<(), String> {
             if !s.terminal_checked {
                 s.terminal_checked = true;
                 s.terminal = crate::terminal::detect();
+            }
+            // Read every time: it is only environment, and it fills in
+            // sessions that started before Sua Vez knew about panes.
+            if let Some(pane) = crate::wezterm::current() {
+                s.pane = Some(pane);
             }
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             let json = serde_json::to_string(&s).map_err(|e| e.to_string())?;
