@@ -75,8 +75,48 @@ tell you which sessions are waiting.
 
 ## Install
 
-Not published to winget, Chocolatey or Homebrew yet. [Build it](#build),
-then run it once.
+### Windows
+
+```powershell
+winget install kidchenko.SuaVez
+# or
+choco install suavez
+```
+
+Or grab [**SuaVez-Setup.exe**](https://github.com/kidchenko/suavez/releases/latest/download/SuaVez-Setup.exe)
+directly. Each release also ships a portable `suavez-x.y.z-x64.exe` that runs
+without installing; see [Releases](https://github.com/kidchenko/suavez/releases).
+
+The binary isn't code-signed, so SmartScreen warns on first run: click **More
+info → Run anyway**.
+
+Use the installer if you want notifications to say "Sua Vez". Windows takes a
+notification's name from a Start menu shortcut, and only the installer creates
+one; a portable copy shows them under PowerShell's name instead. The installer
+also offers to start Sua Vez when you sign in.
+
+### macOS
+
+```bash
+brew install --cask kidchenko/tap/suavez
+```
+
+Or download [**SuaVez.dmg**](https://github.com/kidchenko/suavez/releases/latest/download/SuaVez.dmg)
+(Apple silicon and Intel), open it, and drag Sua Vez into **Applications**. It
+lives in the menu bar with no Dock icon.
+
+The build isn't notarized, so Gatekeeper blocks the first launch from the DMG.
+The Homebrew cask clears this for you. Otherwise, do it once, either with
+**System Settings → Privacy & Security → Open Anyway** or with
+`xattr -dr com.apple.quarantine /Applications/SuaVez.app`. Move the app into
+Applications first, because the flag can't be cleared on the read-only disk
+image.
+
+### Connecting to Claude Code
+
+Launch Sua Vez once after installing. A silent install through winget or
+Chocolatey doesn't start it, so until you do (or until you next sign in, if
+it's set to run at login) nothing is connected.
 
 On first launch Sua Vez connects to Claude Code by itself, since that's the
 only thing it's for. It adds its hooks to `~/.claude/settings.json`, or to
@@ -92,9 +132,9 @@ suavez uninstall    # disconnect
 suavez status       # what every session is doing right now
 ```
 
-The Windows installer removes the hooks when you uninstall. If you delete a
-portable copy, run `suavez uninstall` first, or untick **Connect to Claude
-Code**.
+Uninstalling through the Windows installer, winget, Chocolatey or Homebrew
+removes the hooks too. If you delete a portable copy or drag the app to the
+Trash, run `suavez uninstall` first, or untick **Connect to Claude Code**.
 
 ## How it works
 
@@ -168,9 +208,28 @@ The icons are drawn in code (`src/icon.rs`). `suavez --dump-icons <dir>` writes
 them as raw RGBA, and `assets/make_icons.py` turns those into `icon.ico` and
 the PNGs.
 
+## Releasing
+
+1. Bump `version` in `Cargo.toml`.
+2. `git tag vX.Y.Z && git push origin vX.Y.Z`
+
+The `release` workflow builds the DMG on macOS and the installer on Windows,
+publishes both to a GitHub Release, and rewrites the Chocolatey, winget and
+Homebrew manifests with the new version and checksums. Then:
+
+- **Chocolatey** is pushed automatically when the `CHOCO_API_KEY` secret is set.
+  New packages go through community moderation, so the first one takes a while.
+- **winget**: submit the `manifest-winget` artifact to
+  [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs), or use
+  `wingetcreate submit`.
+- **Homebrew**: copy the `manifest-homebrew` artifact to `Casks/suavez.rb` in
+  `kidchenko/homebrew-tap`.
+
+Running the workflow by hand from the Actions tab is a dry run: everything is
+built and uploaded as artifacts, and nothing is published.
+
 ## Not yet
 
-- winget, Chocolatey and Homebrew packages, and a release workflow.
 - Clicking a session to bring its terminal to the front.
 - Claude Code running inside WSL. Its hooks run on the Linux side and can't
   reach a Windows tray.

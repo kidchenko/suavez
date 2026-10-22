@@ -1,0 +1,37 @@
+# Homebrew cask. Lives in a tap (github.com/kidchenko/homebrew-tap) as
+# Casks/suavez.rb, then: brew install --cask kidchenko/tap/suavez
+#
+# The release workflow rewrites `version` and `sha256` from the DMG it built.
+cask "suavez" do
+  version "0.0.1"
+  sha256 "REPLACE_WITH_SHA256"
+
+  url "https://github.com/kidchenko/suavez/releases/download/v#{version}/SuaVez-#{version}.dmg"
+  name "Sua Vez"
+  desc "Menu bar icon that lights up when Claude Code finishes or needs you"
+  homepage "https://github.com/kidchenko/suavez"
+
+  depends_on macos: ">= :big_sur"
+
+  app "SuaVez.app"
+
+  # Ad-hoc signed, not notarized: without this, Gatekeeper refuses to open it.
+  postflight do
+    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/SuaVez.app"]
+  end
+
+  # Take the hooks out of Claude Code's settings before the binary goes.
+  # Left behind, every Claude Code turn would try to run a missing file.
+  uninstall quit:      "com.kidchenko.suavez",
+            launchctl: "com.kidchenko.suavez",
+            script:    {
+              executable:   "#{appdir}/SuaVez.app/Contents/MacOS/suavez",
+              args:         ["uninstall"],
+              must_succeed: false,
+            }
+
+  zap trash: [
+    "~/Library/Application Support/SuaVez",
+    "~/Library/LaunchAgents/com.kidchenko.suavez.plist",
+  ]
+end

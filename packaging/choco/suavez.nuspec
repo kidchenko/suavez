@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>suavez</id>
+    <version>0.0.1</version>
+    <packageSourceUrl>https://github.com/kidchenko/suavez/tree/main/packaging/choco</packageSourceUrl>
+    <owners>kidchenko</owners>
+    <title>Sua Vez</title>
+    <authors>kidchenko</authors>
+    <projectUrl>https://github.com/kidchenko/suavez</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/kidchenko/suavez/main/assets/icon-256.png</iconUrl>
+    <licenseUrl>https://github.com/kidchenko/suavez/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/kidchenko/suavez</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/kidchenko/suavez/issues</bugTrackerUrl>
+    <tags>suavez claude claude-code ai notifications tray developer-tools</tags>
+    <summary>A tray icon that lights up when Claude Code finishes or needs you</summary>
+    <description><![CDATA[
+A speech bubble in the notification area for Claude Code.
+
+* Turns green when a session finishes, with a notification.
+* Turns amber when Claude is blocked on a permission prompt or a question.
+* Lists every open session by project folder, most urgent first.
+* Stays quiet for quick turns and for prompts you answer right away.
+* Adds its hooks to Claude Code's settings on first launch, and the uninstaller
+  removes them.
+
+A single small executable with no runtime dependencies.
+]]></description>
+    <releaseNotes>https://github.com/kidchenko/suavez/releases</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

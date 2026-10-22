@@ -105,6 +105,9 @@
   }
   .os-mac .dl-mac { background: var(--accent); color: var(--on-acc); box-shadow: none; order: -1; }
   .alt { margin: 18px 0 0; color: var(--faint); font-size: .94rem; }
+  .for-mac { display: none; }
+  .os-mac .for-win { display: none; }
+  .os-mac .for-mac { display: block; }
 
   /* ---------------------------------------------------------------- demo */
   .demo { margin: 64px auto 0; display: flex; flex-direction: column; align-items: center; }
@@ -226,7 +229,8 @@
     <a class="download dl-win" href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez-Setup.exe">Download for Windows</a>
     <a class="download ghost dl-mac" href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez.dmg">Download for macOS</a>
   </div>
-  <p class="alt">Free and open source. Under 1 MB.</p>
+  <p class="alt for-win">or <code>winget install kidchenko.SuaVez</code> &nbsp;·&nbsp; <code>choco install suavez</code></p>
+  <p class="alt for-mac">or <code>brew install --cask kidchenko/tap/suavez</code></p>
 </header>
 
 <div class="wrap demo" aria-label="Interactive preview of Sua Vez">
@@ -306,10 +310,12 @@
     <h2>Install</h2>
     <table>
       <tr><td>Windows installer</td><td><a href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez-Setup.exe">SuaVez-Setup.exe</a></td></tr>
+      <tr><td>winget</td><td><code>winget install kidchenko.SuaVez</code></td></tr>
+      <tr><td>Chocolatey</td><td><code>choco install suavez</code></td></tr>
       <tr><td>macOS</td><td><a href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez.dmg">SuaVez.dmg</a> (Apple silicon and Intel)</td></tr>
-      <tr><td>From source</td><td><a href="https://github.com/kidchenko/suavez#build">Build with Rust</a></td></tr>
+      <tr><td>Homebrew</td><td><code>brew install --cask kidchenko/tap/suavez</code></td></tr>
     </table>
-    <p class="alt" style="text-align:left">Windows 10 or later, macOS 11 or later, and Claude Code. Sessions that were already open before you install need a restart.</p>
+    <p class="alt" style="text-align:left">Windows 10 or later, macOS 11 or later, and Claude Code. Under 1 MB, no runtime to install. Launch it once after installing, and restart any Claude Code sessions that were already open.</p>
   </section>
 </main>
 

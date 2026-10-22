@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: kidchenko.SuaVez
+PackageVersion: 0.0.1
+PackageLocale: en-US
+Publisher: kidchenko
+PublisherUrl: https://github.com/kidchenko
+PublisherSupportUrl: https://github.com/kidchenko/suavez/issues
+PackageName: Sua Vez
+PackageUrl: https://github.com/kidchenko/suavez
+License: MIT
+LicenseUrl: https://github.com/kidchenko/suavez/blob/main/LICENSE
+Copyright: Copyright (c) 2026 kidchenko
+ShortDescription: A tray icon that lights up when Claude Code finishes or needs you
+Description: |-
+  A speech bubble in the notification area that turns green when a Claude Code
+  session finishes and amber when it is blocked on a permission prompt or a
+  question, with a notification for each.
+
+  The menu lists every open session by project folder. Quick turns and prompts
+  you answer right away don't notify. On first launch it adds its hooks to
+  Claude Code's settings, and uninstalling removes them.
+Moniker: suavez
+Tags:
+  - claude
+  - claude-code
+  - ai
+  - notifications
+  - tray
+  - developer-tools
+  - utilities
+ReleaseNotesUrl: https://github.com/kidchenko/suavez/releases
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
