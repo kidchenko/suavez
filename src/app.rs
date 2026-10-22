@@ -40,6 +40,8 @@ const TICK: Duration = Duration::from_secs(15);
 pub enum UserEvent {
     Menu(String),
     Instance(Msg),
+    /// A notification about this session was clicked.
+    Open(String),
 }
 
 #[derive(PartialEq, Eq)]
@@ -50,6 +52,8 @@ pub enum Flow {
 
 pub struct App {
     cfg: Config,
+    /// For notifications to report their clicks back to the event loop.
+    proxy: EventLoopProxy<UserEvent>,
     tray: TrayIcon,
     dark_taskbar: bool,
     sessions: Vec<Session>,
@@ -83,6 +87,7 @@ impl App {
             .map_err(|e| format!("could not create the tray icon: {e}"))?;
 
         let mut app = Self {
+            proxy: proxy.clone(),
             cfg: Config::load(),
             tray,
             dark_taskbar,
@@ -158,6 +163,11 @@ impl App {
                 self.announce_summary();
             }
             UserEvent::Menu(id) => return self.menu(&id),
+            UserEvent::Open(sid) => {
+                linfo!("notification clicked for {sid}");
+                self.open(&sid);
+                self.repaint(true);
+            }
         }
         Flow::Continue
     }
@@ -198,20 +208,34 @@ impl App {
                 if let Some(agent) = other.strip_prefix(ID_CONNECT).and_then(Agent::parse) {
                     self.toggle_connection(agent);
                 } else if let Some(sid) = other.strip_prefix(ID_SESSION) {
-                    if let Some(s) = self.sessions.iter().find(|s| s.id == sid) {
-                        self.tracker.mark_seen(s);
-                        if let Some(t) = &s.terminal {
-                            match terminal::focus(t) {
-                                Ok(()) => linfo!("brought {} forward", t.name),
-                                Err(e) => lwarn!("{e}"),
-                            }
-                        }
-                    }
+                    self.open(sid);
                 }
             }
         }
         self.repaint(true);
         Flow::Continue
+    }
+
+    /// Take you to a session: mark it seen, bring its terminal forward, and
+    /// in WezTerm switch to its own tab. From a menu row or a notification.
+    fn open(&mut self, sid: &str) {
+        let Some(s) = self.sessions.iter().find(|s| s.id == sid) else {
+            return;
+        };
+        self.tracker.mark_seen(s);
+        // Pane first: WezTerm keeps every window in one process, so it is
+        // switching tabs that settles which window comes forward.
+        if let Some(p) = &s.pane {
+            if let Err(e) = wezterm::activate(p) {
+                lwarn!("{e}");
+            }
+        }
+        if let Some(t) = &s.terminal {
+            match terminal::focus(t) {
+                Ok(()) => linfo!("brought {} forward", t.name),
+                Err(e) => lwarn!("{e}"),
+            }
+        }
     }
 
     pub fn tick(&mut self) {
@@ -282,7 +306,16 @@ impl App {
             front
         };
         for t in self.tracker.update(&self.sessions, now, &rules, &in_front) {
-            notify::show(&t.title, &t.body, None);
+            let proxy = self.proxy.clone();
+            let sid = t.session.clone();
+            notify::show_clickable(
+                &t.title,
+                &t.body,
+                None,
+                Box::new(move || {
+                    let _ = proxy.send_event(UserEvent::Open(sid.clone()));
+                }),
+            );
         }
         self.repaint(false);
     }

@@ -1,10 +1,14 @@
-//! Pane-level focus for WezTerm.
+//! Pane-level precision for WezTerm.
 //!
 //! Every program WezTerm starts gets `WEZTERM_PANE` (which pane it is in) and
 //! `WEZTERM_UNIX_SOCKET` (how to reach that WezTerm), and the hook inherits
-//! both. `wezterm cli list-clients` then reports which pane has focus. So for
-//! WezTerm, "its terminal is in front" can mean the session's own pane, not
-//! any WezTerm window: a finish in another tab still notifies.
+//! both. With them, the tray can ask WezTerm two things through its CLI:
+//!
+//! - `list-clients`: which pane has focus. "Its terminal is in front" then
+//!   means the session's own pane, so a finish in another tab still notifies.
+//! - `activate-pane`: switch to the session's tab, so clicking a session or
+//!   its notification lands on that session rather than whatever tab was
+//!   showing.
 
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
@@ -43,8 +47,24 @@ const PATIENCE: Duration = Duration::from_millis(800);
 /// Whether `pane` has focus. `None` when WezTerm could not be asked, so the
 /// caller can fall back to "is WezTerm in front at all".
 pub fn is_focused(pane: &Pane) -> Option<bool> {
+    let out = cli(pane, &["list-clients", "--format", "json"])?;
+    focused_in(&out, pane.id)
+}
+
+/// Switch WezTerm to `pane`'s tab.
+pub fn activate(pane: &Pane) -> Result<(), String> {
+    let id = pane.id.to_string();
+    cli(pane, &["activate-pane", "--pane-id", &id])
+        .map(|_| ())
+        .ok_or_else(|| format!("WezTerm would not switch to pane {id}"))
+}
+
+/// Run `wezterm cli <args>` against the pane's WezTerm and return its stdout,
+/// or `None` if it failed or took too long.
+fn cli(pane: &Pane, args: &[&str]) -> Option<String> {
     let mut cmd = std::process::Command::new(&pane.cli);
-    cmd.args(["cli", "list-clients", "--format", "json"])
+    cmd.arg("cli")
+        .args(args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null());
@@ -76,7 +96,7 @@ pub fn is_focused(pane: &Pane) -> Option<bool> {
     }
     let mut out = String::new();
     std::io::Read::read_to_string(&mut child.stdout.take()?, &mut out).ok()?;
-    focused_in(&out, pane.id)
+    Some(out)
 }
 
 /// Pure half of `is_focused`: does any client in `list-clients` JSON have

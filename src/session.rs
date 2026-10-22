@@ -368,6 +368,8 @@ pub enum Overall {
 
 #[derive(PartialEq, Debug)]
 pub struct Toast {
+    /// The session it is about, for opening it when the toast is clicked.
+    pub session: String,
     pub title: String,
     pub body: String,
 }
@@ -431,6 +433,7 @@ impl Tracker {
                 State::Done => {
                     if rules.notify_done && s.turn_secs() >= rules.min_turn_secs && !watching(s) {
                         toasts.push(Toast {
+                            session: s.id.clone(),
                             title: format!("Your turn in {name}"),
                             body: format!(
                                 "{} finished after {}.",
@@ -449,6 +452,7 @@ impl Tracker {
                     }
                     if rules.notify_needs_you && !watching(s) {
                         toasts.push(Toast {
+                            session: s.id.clone(),
                             title: format!("{name} needs you"),
                             body: if s.message.is_empty() {
                                 format!("{} is waiting on you.", s.agent.name())

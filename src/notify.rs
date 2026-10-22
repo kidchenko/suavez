@@ -5,7 +5,21 @@
 //! Best-effort throughout: a notification that cannot be shown (Focus Assist,
 //! Do Not Disturb, policy) is logged and otherwise ignored.
 
-pub use imp::show;
+/// What a click on the notification does. Called on a system thread.
+pub type OnClick = Box<dyn Fn() + Send + 'static>;
+
+pub fn show(title: &str, line1: &str, line2: Option<&str>) {
+    imp::show(title, line1, line2, None);
+}
+
+/// A notification that does `on_click` when clicked. On Windows that is
+/// certain while its banner is on screen; a click from the notification centre
+/// later goes through Windows, which may only relaunch the app. macOS shows it
+/// all the same, but clicking opens Script Editor (see below), so the click does
+/// nothing useful there yet.
+pub fn show_clickable(title: &str, line1: &str, line2: Option<&str>, on_click: OnClick) {
+    imp::show(title, line1, line2, Some(on_click));
+}
 
 // ---------------------------------------------------------------------------
 // Windows
@@ -51,13 +65,19 @@ mod imp {
         }
     }
 
-    pub fn show(title: &str, line1: &str, line2: Option<&str>) {
+    pub fn show(title: &str, line1: &str, line2: Option<&str>, on_click: Option<super::OnClick>) {
         let mut toast = Toast::new(&app_id())
             .title(title)
             .text1(line1)
             .duration(Duration::Short);
         if let Some(l2) = line2 {
             toast = toast.text2(l2);
+        }
+        if let Some(f) = on_click {
+            toast = toast.on_activated(move |_| {
+                f();
+                Ok(())
+            });
         }
         match toast.show() {
             Ok(()) => linfo!("toast shown: {title} / {line1}"),
@@ -78,7 +98,10 @@ mod imp {
 mod imp {
     use crate::log::{linfo, lwarn};
 
-    pub fn show(title: &str, line1: &str, line2: Option<&str>) {
+    /// `display notification` cannot carry a click action: clicking one
+    /// opens Script Editor, whose identity it borrows. A real click needs
+    /// UserNotifications and a signed bundle, which is for later.
+    pub fn show(title: &str, line1: &str, line2: Option<&str>, _on_click: Option<super::OnClick>) {
         // Notification anatomy on macOS is title / subtitle / body. We map the
         // Windows title to the title, the first line to the body, and the
         // optional detail to the subtitle.
