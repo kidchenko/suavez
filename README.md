@@ -132,9 +132,9 @@ image.
 
 ### Connecting to your agents
 
-Launch Sua Vez once after installing. A silent install through winget or
-Chocolatey doesn't start it, so until you do (or until you next sign in, if
-it's set to run at login) nothing is connected.
+Launch Sua Vez once after installing. Homebrew starts it for you, but a silent
+install through winget or Chocolatey doesn't, so until you do (or until you
+next sign in, if it's set to run at login) nothing is connected.
 
 Sua Vez connects to each agent by itself the first time it finds it installed,
 and tells you when it does. An agent you install later is picked up within 15
@@ -164,6 +164,10 @@ Uninstalling through the Windows installer, winget, Chocolatey or Homebrew
 removes the hooks from every agent too. If you delete a portable copy or drag
 the app to the Trash, run `suavez uninstall` first, or untick each **Connect
 to …**.
+
+Package managers run `suavez uninstall --package` instead, because Homebrew
+runs it on upgrades too. It takes the hooks out the same way, but the next copy
+of Sua Vez to start connects again by itself.
 
 ## How it works
 

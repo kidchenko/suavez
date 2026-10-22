@@ -70,6 +70,12 @@ fn main() {
         }
         Some(cmd) => {
             util::attach_console();
+            // `suavez status | head` should end quietly, not panic on a closed
+            // pipe: the default SIGPIPE behaviour, which Rust turns off.
+            #[cfg(target_os = "macos")]
+            unsafe {
+                libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+            }
             std::process::exit(cli(cmd, args.get(1).map(String::as_str)));
         }
     }
@@ -178,6 +184,21 @@ fn cli(cmd: &str, arg: Option<&str>) -> i32 {
             let code = run(true, hooks::Integration::install, "Connected to");
             if code == 0 {
                 println!("Takes effect in new sessions.");
+            }
+            code
+        }
+        // What a package manager runs, and it runs it on upgrades as well as
+        // uninstalls. The hooks come out, since the binary may be about to go,
+        // but Sua Vez also forgets having connected, so the next copy to launch
+        // connects again by itself instead of taking this as your choice.
+        "uninstall" if arg == Some("--package") => {
+            let code = cli("uninstall", None);
+            let mut cfg = config::Config::load();
+            cfg.offered.clear();
+            cfg.hooks_offered = false;
+            if let Err(e) = cfg.save() {
+                eprintln!("suavez: could not save the config: {e}");
+                return 1;
             }
             code
         }

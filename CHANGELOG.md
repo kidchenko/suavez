@@ -1,12 +1,17 @@
 # Changelog
 
-## [0.0.2] - 2026-10-22
+## [0.0.2] - 2026-10-23
 
 - No second notification for Claude Code sessions inside Claude Desktop, which
   already sends its own. The bubble still turns. Turn it off under
   **Settings → Quiet for Claude Desktop sessions**.
 - On macOS 26 the menu no longer closes the first time you open Settings after
   launch, and it stays open while sessions update underneath it.
+- `brew upgrade` no longer disconnects Sua Vez from your agents for good. The
+  cask runs the new `suavez uninstall --package`, which lets the next launch
+  reconnect, and starts the app after installing or upgrading. Upgrades also
+  keep **Run at login**.
+- `suavez status | head` ends quietly instead of crashing on the closed pipe.
 
 ## [0.0.1] - 2026-10-22
 
