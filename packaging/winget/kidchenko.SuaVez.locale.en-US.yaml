@@ -10,19 +10,24 @@ PackageUrl: https://github.com/kidchenko/suavez
 License: MIT
 LicenseUrl: https://github.com/kidchenko/suavez/blob/main/LICENSE
 Copyright: Copyright (c) 2026 kidchenko
-ShortDescription: A tray icon that lights up when Claude Code finishes or needs you
+ShortDescription: A tray icon that lights up when your coding agent finishes or needs you
 Description: |-
-  A speech bubble in the notification area that turns green when a Claude Code
+  A speech bubble in the notification area that turns green when a coding agent
   session finishes and amber when it is blocked on a permission prompt or a
-  question, with a notification for each.
+  question, with a notification for each. Works with Claude Code, Codex,
+  Gemini CLI and Devin.
 
-  The menu lists every open session by project folder. Quick turns and prompts
-  you answer right away don't notify. On first launch it adds its hooks to
-  Claude Code's settings, and uninstalling removes them.
+  The menu lists every open session by project folder; click one to bring its
+  terminal forward. Quick turns and prompts you answer right away don't notify.
+  It adds its hooks to each installed agent's settings, and uninstalling
+  removes them.
 Moniker: suavez
 Tags:
   - claude
   - claude-code
+  - codex
+  - gemini
+  - devin
   - ai
   - notifications
   - tray

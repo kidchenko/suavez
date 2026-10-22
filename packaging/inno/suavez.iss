@@ -71,12 +71,12 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run";   ValueType
 
 [Run]
 ; As the signed-in user, not the elevated installer: the first launch connects
-; to Claude Code through that user's ~/.claude/settings.json.
+; to the agents through that user's own settings files.
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}";   Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [UninstallRun]
-; Take the hooks out of Claude Code's settings first. Left behind, every
-; Claude Code turn would try to run an exe that no longer exists.
+; Take the hooks out of every agent's settings first. Left behind, every
+; agent turn would try to run an exe that no longer exists.
 Filename: "{app}\{#AppExe}"; Parameters: "uninstall";   Flags: runhidden waituntilterminated; RunOnceId: "UnhookSuaVez"
 Filename: "{sys}\taskkill.exe"; Parameters: "/f /im {#AppExe}";   Flags: runhidden; RunOnceId: "KillSuaVez"
 

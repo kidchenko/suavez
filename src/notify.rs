@@ -1,5 +1,5 @@
-//! Notifications, for the two moments Sua Vez exists for: Claude finished a
-//! turn, or Claude is blocked waiting on you. Everything else is visible in the
+//! Notifications, for the two moments Sua Vez exists for: an agent finished a
+//! turn, or an agent is blocked waiting on you. Everything else is visible in the
 //! bubble and its menu.
 //!
 //! Best-effort throughout: a notification that cannot be shown (Focus Assist,

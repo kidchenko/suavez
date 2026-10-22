@@ -8,7 +8,7 @@ cask "suavez" do
 
   url "https://github.com/kidchenko/suavez/releases/download/v#{version}/SuaVez-#{version}.dmg"
   name "Sua Vez"
-  desc "Menu bar icon that lights up when Claude Code finishes or needs you"
+  desc "Menu bar icon that lights up when a coding agent finishes or needs you"
   homepage "https://github.com/kidchenko/suavez"
 
   depends_on macos: ">= :big_sur"
@@ -20,8 +20,8 @@ cask "suavez" do
     system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/SuaVez.app"]
   end
 
-  # Take the hooks out of Claude Code's settings before the binary goes.
-  # Left behind, every Claude Code turn would try to run a missing file.
+  # Take the hooks out of every agent's settings before the binary goes.
+  # Left behind, every agent turn would try to run a missing file.
   uninstall quit:      "com.kidchenko.suavez",
             launchctl: "com.kidchenko.suavez",
             script:    {

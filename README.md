@@ -4,18 +4,18 @@
 
 # Sua Vez
 
-A tray icon that lights up when Claude Code finishes, or is waiting on you.<br>
-On Windows and macOS.
+A tray icon that lights up when your coding agent finishes, or is waiting on you.<br>
+For Claude Code, Codex, Gemini CLI and Devin, on Windows and macOS.
 
 <sub><i>sua vez</i>: Portuguese for <i>your turn</i></sub>
 
 </div>
 
-You give Claude Code a task, switch to something else, and come back twenty
+You give an agent a task, switch to something else, and come back twenty
 minutes later. Then you find it stopped after thirty seconds to ask whether it
 could run `npm install`. Sua Vez is a speech bubble in the tray that turns amber
-when Claude is blocked on you and green when it's done, with a notification for
-each.
+when an agent is blocked on you and green when it's done, with a notification
+for each.
 
 It's a single 0.5 MB binary with no runtime dependencies. In the tray it uses
 about 2 MB of memory and no measurable CPU.
@@ -25,23 +25,26 @@ about 2 MB of memory and no measurable CPU.
 | | |
 |---|---|
 | **Outline** | Nothing going on. |
-| **Outline with dots** | Claude is working. |
-| **Green** | Claude finished. Your turn. |
-| **Amber with `!`** | Claude is blocked on a permission prompt or a question. |
+| **Outline with dots** | An agent is working. |
+| **Green** | An agent finished. Your turn. |
+| **Amber with `!`** | An agent is blocked on a permission prompt or a question. |
 
-With several sessions open, the bubble shows the most urgent one. Click it,
-with either button, to open the menu. On macOS the quiet states follow the menu
-bar's tint, and the two that need you keep their colour.
+With several sessions open, from one agent or several, the bubble shows the
+most urgent one. Click it, with either button, to open the menu. On macOS the
+quiet states follow the menu bar's tint, and the two that need you keep their
+colour.
 
 ## The menu
 
-Every open session is listed by project folder, most urgent first:
+Every open session is listed by project folder, most urgent first. Sessions
+from agents other than Claude Code carry the agent's name:
 
 ```
-1 needs you · 1 your turn · 1 working
+2 need you · 1 your turn · 1 working
 ─────────────────────────────────────
 ⚠  cota wants to use Bash · 2m ago
-●  cafe: your turn · 5m ago
+⚠  porta (Codex) wants to use apply_patch · just now
+●  cafe (Gemini): your turn · 5m ago
 …  presence-sync is working · 1m
 ```
 
@@ -57,10 +60,10 @@ was in front last.
 |---|---|
 | **Mark all as seen** | Clears the colour from every finished or blocked session. |
 | **Forget all sessions** | For a session stuck on "working" after a terminal crashed. Live sessions come back with their next event. |
-| **Notify when Claude finishes** | A notification when a turn ends. |
-| **Notify when Claude needs you** | A notification when Claude is blocked on you. |
+| **Notify when it's your turn** | A notification when a turn ends. |
+| **Notify when an agent needs you** | A notification when an agent is blocked on you. |
 | **Edit settings…** | Opens `config.json`. [See below.](#configuration) |
-| **Connect to Claude Code** | Adds or removes Sua Vez's hooks in Claude Code's settings. |
+| **Connect to …** | One per installed agent. Adds or removes Sua Vez's hooks in that agent's settings. |
 | **Run at login** | Per-user, no admin. |
 
 ### When it notifies
@@ -117,59 +120,77 @@ The Homebrew cask clears this for you. Otherwise, do it once, either with
 Applications first, because the flag can't be cleared on the read-only disk
 image.
 
-### Connecting to Claude Code
+### Connecting to your agents
 
 Launch Sua Vez once after installing. A silent install through winget or
 Chocolatey doesn't start it, so until you do (or until you next sign in, if
 it's set to run at login) nothing is connected.
 
-On first launch Sua Vez connects to Claude Code by itself, since that's the
-only thing it's for. It adds its hooks to `~/.claude/settings.json`, or to
-`$CLAUDE_CONFIG_DIR/settings.json` if you've set that, and tells you it did.
-Claude Code reads hooks when a session starts, so sessions that are already
-open need a restart before they show up.
+Sua Vez connects to each agent by itself the first time it finds it installed,
+and tells you when it does. An agent you install later is picked up within 15
+seconds, without a restart. If you disconnect one from the menu, it stays
+disconnected.
+
+| Agent | Where the hooks go |
+|---|---|
+| Claude Code | `~/.claude/settings.json`, or `$CLAUDE_CONFIG_DIR/settings.json` |
+| Codex | `~/.codex/hooks.json`, or `$CODEX_HOME/hooks.json` |
+| Gemini CLI | `~/.gemini/settings.json` |
+| Devin | Nothing extra. Devin loads Claude Code's hooks by default, so connecting Claude Code connects Devin too. |
+
+Agents read hooks when a session starts, so sessions that are already open
+need a restart before they show up.
 
 To do it from a terminal instead:
 
 ```
-suavez install      # connect
-suavez uninstall    # disconnect
-suavez status       # what every session is doing right now
+suavez install            # connect every installed agent
+suavez install codex      # or just one: claude, codex or gemini
+suavez uninstall          # disconnect from all of them
+suavez status             # connections, and what every session is doing
 ```
 
 Uninstalling through the Windows installer, winget, Chocolatey or Homebrew
-removes the hooks too. If you delete a portable copy or drag the app to the
-Trash, run `suavez uninstall` first, or untick **Connect to Claude Code**.
+removes the hooks from every agent too. If you delete a portable copy or drag
+the app to the Trash, run `suavez uninstall` first, or untick each **Connect
+to …**.
 
 ## How it works
 
-Claude Code [hooks](https://docs.claude.com/en/docs/claude-code/hooks) run a
-command on certain events and pass it a JSON description on stdin. Sua Vez
-registers itself, `suavez hook`, for six of them:
+Each agent can run a command on certain events and pass it a JSON description
+on stdin: [Claude Code](https://code.claude.com/docs/en/hooks),
+[Codex](https://learn.chatgpt.com/docs/hooks),
+[Gemini CLI](https://geminicli.com/docs/hooks/reference.md) and
+[Devin](https://docs.devin.ai/cli/extensibility/hooks/overview.md) all call
+these hooks. Sua Vez registers itself, `suavez hook`, for the events that
+matter:
 
-| Event | Becomes |
-|---|---|
-| `SessionStart` | ready |
-| `UserPromptSubmit` | working, and the turn's clock starts |
-| `PostToolUse` | working (any permission prompt has been answered) |
-| `Notification` | needs you, for a permission prompt or a question |
-| `Stop` | your turn |
-| `SessionEnd` | the session is removed |
+| Becomes | Claude Code, Codex, Devin | Gemini CLI |
+|---|---|---|
+| ready | `SessionStart` | `SessionStart` |
+| working, and the turn's clock starts | `UserPromptSubmit` | `BeforeAgent` |
+| working (any permission prompt has been answered) | `PostToolUse` | `AfterTool` |
+| needs you | `PermissionRequest`, `Notification` | `Notification` (tool permission) |
+| your turn | `Stop` | `AfterAgent` |
+| ready, without a notification (you pressed Esc) | `Interrupt` (Codex) | |
+| the session is removed | `SessionEnd` | `SessionEnd` |
 
 The hook process writes one small JSON file per session under `sessions/` in
 the data folder, pokes the tray, and exits in about 50 ms. The first event of a
 session takes about twice as long, because that's when it walks up its parent
-processes to find the terminal app and saves it with the session. It prints nothing
-and always exits 0, so a failure in Sua Vez never stops Claude. The tray rereads
-the folder when poked, plus once every 15 seconds as a fallback and to drop
-sessions that have been quiet for 8 hours. Those are usually ones whose
-terminal closed without a `SessionEnd`.
+processes to find the terminal app and saves it with the session. It always
+exits 0, so a failure in Sua Vez never stops an agent. For Claude Code and Devin
+it prints nothing; Codex and Gemini CLI insist on a JSON reply, so for them it
+prints `{}`, which changes nothing. The tray rereads the folder when poked, plus
+once every 15 seconds as a fallback and to drop sessions that have been quiet
+for 8 hours. Those are usually ones whose terminal closed without a
+`SessionEnd`.
 
-When Sua Vez edits `settings.json`, it only adds or removes entries whose
+When Sua Vez edits an agent's settings, it only adds or removes entries whose
 command is its own `hook`. Your other hooks and settings stay as they were, in
-the same order. If `settings.json` isn't valid JSON, it leaves the file alone
-and tells you why. If you move the binary, the next launch points the hooks at
-the new location.
+the same order. If the file isn't valid JSON, it leaves it alone and tells you
+why. If you move the binary, the next launch points the hooks at the new
+location.
 
 ## Configuration
 
@@ -183,7 +204,7 @@ the new location.
   "minTurnSeconds": 30,
   "graceSeconds": 8,
   "staleHours": 8,
-  "hooksOffered": true
+  "offered": ["claude", "codex"]
 }
 ```
 
@@ -192,7 +213,7 @@ the new location.
 | `minTurnSeconds` | Turns shorter than this don't notify when they end. `0` notifies every time. |
 | `graceSeconds` | How long a permission prompt waits before it notifies. |
 | `staleHours` | Sessions quiet for this long are dropped. |
-| `hooksOffered` | Set after the first launch connects to Claude Code, so disconnecting stays disconnected. |
+| `offered` | Agents Sua Vez has already connected to by itself, so disconnecting one stays disconnected. |
 
 Changes made by hand are picked up within 15 seconds. The log, `suavez.log`,
 is in the same folder.
@@ -238,8 +259,10 @@ built and uploaded as artifacts, and nothing is published.
 ## Not yet
 
 - Bringing the exact tab forward, not just the terminal's window.
-- Claude Code running inside WSL. Its hooks run on the Linux side and can't
-  reach a Windows tray.
+- Agents running inside WSL. Their hooks run on the Linux side and can't reach
+  a Windows tray.
+- Cloud agents, such as Devin sessions started in the browser or Slack. There's
+  nothing running on your machine to call a hook.
 
 ## License
 

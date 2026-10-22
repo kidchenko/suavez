@@ -1,24 +1,28 @@
-//! What each Claude Code session is doing, as told by its hooks.
+//! What each coding agent session is doing, as told by its hooks.
 //!
-//! Claude Code runs `suavez hook` on a handful of events and pipes it a JSON
-//! description on stdin. That short-lived process folds the event into a small
+//! The agent (Claude Code, Codex, Gemini CLI or Devin) runs `suavez hook` on a
+//! handful of events and pipes it a JSON description on stdin. That short-lived process folds the event into a small
 //! file per session under `sessions/`, pokes the tray, and exits. The tray
 //! reads the directory back. Files rather than a socket protocol because they
 //! survive the tray not running yet, being restarted, or several hooks firing at
 //! once, and because `type sessions\*.json` is the whole debugging story.
 //!
-//! | hook event          | becomes                                          |
-//! |---------------------|--------------------------------------------------|
-//! | `SessionStart`      | `Ready` (a resume or compact keeps the state)    |
-//! | `UserPromptSubmit`  | `Working`, and the turn's clock starts           |
-//! | `PostToolUse`       | `Working` (a permission prompt was answered)     |
-//! | `Notification`      | `NeedsYou` for a permission prompt or a question |
-//! | `Stop`              | `Done`: your turn                                |
-//! | `SessionEnd`        | the file is removed                              |
+//! | hook event                          | becomes                               |
+//! |-------------------------------------|---------------------------------------|
+//! | `SessionStart`                      | `Ready` (a resume keeps the state)    |
+//! | `UserPromptSubmit`, `BeforeAgent`   | `Working`; the turn's clock starts    |
+//! | `PostToolUse`, `AfterTool`          | `Working` (any prompt was answered)   |
+//! | `PermissionRequest`, `Notification` | `NeedsYou`, for a permission prompt   |
+//! | `Stop`, `AfterAgent`                | `Done`: your turn                     |
+//! | `Interrupt`                         | `Ready`: you stopped it, so you know  |
+//! | `SessionEnd`                        | the file is removed                   |
+//!
+//! The second name in a row is Gemini CLI's; the others share Claude Code's.
 //!
 //! `Tracker` is the tray's half: it turns successive snapshots into
 //! notifications, and remembers which ones you have already seen.
 
+use crate::agent::Agent;
 use crate::log::lwarn;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -30,7 +34,7 @@ pub enum State {
     /// Open, nothing asked yet.
     #[default]
     Ready,
-    /// Claude is on it.
+    /// The agent is on it.
     Working,
     /// Blocked on a permission prompt or a question.
     NeedsYou,
@@ -42,6 +46,7 @@ pub enum State {
 #[serde(rename_all = "camelCase", default)]
 pub struct Session {
     pub id: String,
+    pub agent: Agent,
     pub cwd: String,
     pub state: State,
     /// When the current state began.
@@ -50,8 +55,8 @@ pub struct Session {
     pub updated: u64,
     /// When the prompt that started the current turn was submitted.
     pub turn_started: u64,
-    /// Claude's own words for `NeedsYou`, e.g. "Claude needs your permission
-    /// to use Bash".
+    /// The agent's own words for `NeedsYou`, e.g. "Claude needs your
+    /// permission to use Bash".
     pub message: String,
     /// The app the session runs in, for bringing it to the front.
     pub terminal: Option<crate::terminal::Terminal>,
@@ -69,7 +74,7 @@ impl Session {
             .rsplit(['/', '\\'])
             .next()
             .filter(|s| !s.is_empty())
-            .unwrap_or("Claude Code")
+            .unwrap_or(self.agent.product())
     }
 
     /// How long the turn that just ended took, for `Done`.
@@ -92,7 +97,8 @@ impl Session {
 }
 
 /// The subset of a hook's stdin that matters here. Everything is optional:
-/// Claude Code adds fields over time and older versions lack some of these.
+/// agents add fields over time, older versions lack some, and not every agent
+/// sends every field.
 #[derive(Deserialize, Default, Debug)]
 #[serde(default)]
 pub struct HookInput {
@@ -101,6 +107,7 @@ pub struct HookInput {
     pub hook_event_name: String,
     pub message: String,
     pub notification_type: String,
+    pub tool_name: String,
 }
 
 #[derive(PartialEq, Debug)]
@@ -109,19 +116,30 @@ pub enum Change {
     Remove,
 }
 
+/// Gemini CLI's names for the events the others share.
+fn canonical(event: &str) -> &str {
+    match event {
+        "BeforeAgent" => "UserPromptSubmit",
+        "BeforeTool" | "AfterTool" => "PostToolUse",
+        "AfterAgent" => "Stop",
+        other => other,
+    }
+}
+
 /// Fold one hook event into the session's previous state. Pure.
-pub fn fold(prev: Option<Session>, input: &HookInput, now: u64) -> Change {
+pub fn fold(prev: Option<Session>, input: &HookInput, agent: Agent, now: u64) -> Change {
     let mut s = prev.clone().unwrap_or_else(|| Session {
         id: input.session_id.clone(),
         since: now,
         ..Session::default()
     });
+    s.agent = agent;
     s.updated = now;
     if !input.cwd.is_empty() {
         s.cwd = input.cwd.clone();
     }
 
-    let next = match input.hook_event_name.as_str() {
+    let next = match canonical(&input.hook_event_name) {
         "SessionEnd" => return Change::Remove,
         // A resume, /clear or auto-compact also fires this; only a session we
         // have never heard of starts out Ready.
@@ -146,7 +164,21 @@ pub fn fold(prev: Option<Session>, input: &HookInput, now: u64) -> Change {
             Kind::Idle if s.state == State::Working || s.state == State::Ready => Some(State::Done),
             _ => None,
         },
+        "PermissionRequest" => {
+            s.message = if input.tool_name.is_empty() {
+                format!("{} needs your permission", agent.name())
+            } else {
+                format!(
+                    "{} needs your permission to use {}",
+                    agent.name(),
+                    input.tool_name
+                )
+            };
+            Some(State::NeedsYou)
+        }
         "Stop" => Some(State::Done),
+        // You pressed Esc: you are looking at it, so nothing to announce.
+        "Interrupt" => Some(State::Ready),
         _ => None,
     };
 
@@ -172,7 +204,8 @@ enum Kind {
 /// does not.
 fn notification_kind(input: &HookInput) -> Kind {
     match input.notification_type.as_str() {
-        "permission_prompt" | "elicitation_dialog" => return Kind::Blocked,
+        // Claude Code's, then Gemini CLI's.
+        "permission_prompt" | "elicitation_dialog" | "ToolPermission" => return Kind::Blocked,
         "idle_prompt" => return Kind::Idle,
         "" => {}
         _ => return Kind::Other,
@@ -212,14 +245,27 @@ fn read(path: &Path) -> Option<Session> {
 }
 
 /// The `suavez hook` side: fold one event from stdin into its file.
-pub fn ingest(stdin: &str, now: u64) -> Result<(), String> {
-    let input: HookInput =
+pub fn ingest(stdin: &str, agent: Agent, now: u64) -> Result<(), String> {
+    let mut input: HookInput =
         serde_json::from_str(stdin).map_err(|e| format!("hook input is not JSON: {e}"))?;
+    // Devin's payload has no cwd; it sets the project folder in the
+    // environment instead. Failing both, a hook runs in the project folder.
+    if input.cwd.is_empty() {
+        input.cwd = std::env::var("DEVIN_PROJECT_DIR")
+            .ok()
+            .filter(|d| !d.is_empty())
+            .or_else(|| {
+                std::env::current_dir()
+                    .ok()
+                    .map(|d| d.to_string_lossy().into_owned())
+            })
+            .unwrap_or_default();
+    }
     let dir = dir().ok_or("no config directory in environment")?;
     let name = file_name(&input.session_id).ok_or("hook input has no session_id")?;
     let path = dir.join(name);
 
-    match fold(read(&path), &input, now) {
+    match fold(read(&path), &input, agent, now) {
         Change::Remove => match std::fs::remove_file(&path) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
                 Err(format!("could not remove {}: {e}", path.display()))
@@ -366,7 +412,8 @@ impl Tracker {
                         toasts.push(Toast {
                             title: format!("Your turn in {name}"),
                             body: format!(
-                                "Claude finished after {}.",
+                                "{} finished after {}.",
+                                s.agent.name(),
                                 crate::util::span(s.turn_secs())
                             ),
                         });
@@ -383,7 +430,7 @@ impl Tracker {
                         toasts.push(Toast {
                             title: format!("{name} needs you"),
                             body: if s.message.is_empty() {
-                                "Claude is waiting on you.".into()
+                                format!("{} is waiting on you.", s.agent.name())
                             } else {
                                 s.message.clone()
                             },
@@ -434,21 +481,26 @@ impl Tracker {
     }
 }
 
-/// Project names, disambiguated when two sessions share a folder.
+/// Project names, with the agent when it isn't Claude Code, and disambiguated
+/// when two sessions of one agent share a folder.
 pub fn display_names(sessions: &[Session]) -> HashMap<String, String> {
-    let mut count: HashMap<&str, usize> = HashMap::new();
+    let base = |s: &Session| match s.agent {
+        Agent::Claude => s.project().to_string(),
+        other => format!("{} ({})", s.project(), other.name()),
+    };
+    let mut count: HashMap<String, usize> = HashMap::new();
     for s in sessions {
-        *count.entry(s.project()).or_default() += 1;
+        *count.entry(base(s)).or_default() += 1;
     }
     sessions
         .iter()
         .map(|s| {
-            let p = s.project();
-            let name = if count[p] > 1 {
+            let b = base(s);
+            let name = if count[&b] > 1 {
                 let short: String = s.id.chars().take(4).collect();
-                format!("{p} ({short})")
+                format!("{b} #{short}")
             } else {
-                p.to_string()
+                b
             };
             (s.id.clone(), name)
         })
@@ -484,30 +536,30 @@ mod tests {
 
     #[test]
     fn a_turn_goes_working_then_done() {
-        let s = write(fold(None, &ev("SessionStart"), 100));
+        let s = write(fold(None, &ev("SessionStart"), Agent::Claude, 100));
         assert_eq!(s.state, State::Ready);
-        let s = write(fold(Some(s), &ev("UserPromptSubmit"), 110));
+        let s = write(fold(Some(s), &ev("UserPromptSubmit"), Agent::Claude, 110));
         assert_eq!(
             (s.state, s.since, s.turn_started),
             (State::Working, 110, 110)
         );
-        let s = write(fold(Some(s), &ev("PostToolUse"), 150));
+        let s = write(fold(Some(s), &ev("PostToolUse"), Agent::Claude, 150));
         assert_eq!(s.since, 110, "staying in a state keeps its start");
-        let s = write(fold(Some(s), &ev("Stop"), 200));
+        let s = write(fold(Some(s), &ev("Stop"), Agent::Claude, 200));
         assert_eq!((s.state, s.turn_secs()), (State::Done, 90));
         assert_eq!(s.project(), "cota");
     }
 
     #[test]
     fn permission_prompt_then_answer() {
-        let s = write(fold(None, &ev("UserPromptSubmit"), 0));
+        let s = write(fold(None, &ev("UserPromptSubmit"), Agent::Claude, 0));
         let mut n = ev("Notification");
         n.notification_type = "permission_prompt".into();
         n.message = "Claude needs your permission to use Bash".into();
-        let s = write(fold(Some(s), &n, 5));
+        let s = write(fold(Some(s), &n, Agent::Claude, 5));
         assert_eq!(s.state, State::NeedsYou);
         assert_eq!(s.message, "Claude needs your permission to use Bash");
-        let s = write(fold(Some(s), &ev("PostToolUse"), 9));
+        let s = write(fold(Some(s), &ev("PostToolUse"), Agent::Claude, 9));
         assert_eq!(s.state, State::Working);
         assert!(s.message.is_empty());
     }
@@ -516,30 +568,80 @@ mod tests {
     fn old_versions_without_notification_type_are_read_from_the_message() {
         let mut n = ev("Notification");
         n.message = "Claude needs your permission to use Edit".into();
-        assert_eq!(write(fold(None, &n, 0)).state, State::NeedsYou);
+        assert_eq!(
+            write(fold(None, &n, Agent::Claude, 0)).state,
+            State::NeedsYou
+        );
         n.message = "Claude is waiting for your input".into();
-        assert_eq!(write(fold(None, &n, 0)).state, State::Done);
+        assert_eq!(write(fold(None, &n, Agent::Claude, 0)).state, State::Done);
     }
 
     #[test]
     fn idle_reminder_does_not_restart_a_finish() {
-        let s = write(fold(None, &ev("Stop"), 50));
+        let s = write(fold(None, &ev("Stop"), Agent::Claude, 50));
         let mut n = ev("Notification");
         n.notification_type = "idle_prompt".into();
-        let s = write(fold(Some(s), &n, 110));
+        let s = write(fold(Some(s), &n, Agent::Claude, 110));
         assert_eq!((s.state, s.since), (State::Done, 50));
     }
 
     #[test]
     fn compact_mid_turn_keeps_working() {
-        let s = write(fold(None, &ev("UserPromptSubmit"), 0));
-        let s = write(fold(Some(s), &ev("SessionStart"), 10));
+        let s = write(fold(None, &ev("UserPromptSubmit"), Agent::Claude, 0));
+        let s = write(fold(Some(s), &ev("SessionStart"), Agent::Claude, 10));
         assert_eq!(s.state, State::Working);
     }
 
     #[test]
     fn session_end_removes() {
-        assert_eq!(fold(None, &ev("SessionEnd"), 0), Change::Remove);
+        assert_eq!(
+            fold(None, &ev("SessionEnd"), Agent::Claude, 0),
+            Change::Remove
+        );
+    }
+
+    #[test]
+    fn gemini_names_map_onto_the_same_states() {
+        let g = Agent::Gemini;
+        let s = write(fold(None, &ev("BeforeAgent"), g, 100));
+        assert_eq!((s.state, s.agent), (State::Working, Agent::Gemini));
+        let mut n = ev("Notification");
+        n.notification_type = "ToolPermission".into();
+        n.message = "Allow run_shell_command?".into();
+        let s = write(fold(Some(s), &n, g, 105));
+        assert_eq!(s.state, State::NeedsYou);
+        let s = write(fold(Some(s), &ev("AfterTool"), g, 109));
+        assert_eq!(s.state, State::Working);
+        let s = write(fold(Some(s), &ev("AfterAgent"), g, 160));
+        assert_eq!((s.state, s.turn_secs()), (State::Done, 60));
+    }
+
+    #[test]
+    fn permission_requests_name_the_agent_and_tool() {
+        let mut p = ev("PermissionRequest");
+        p.tool_name = "apply_patch".into();
+        let s = write(fold(None, &p, Agent::Codex, 0));
+        assert_eq!(s.state, State::NeedsYou);
+        assert_eq!(s.message, "Codex needs your permission to use apply_patch");
+    }
+
+    #[test]
+    fn an_interrupt_is_not_news() {
+        let s = write(fold(None, &ev("UserPromptSubmit"), Agent::Codex, 0));
+        let s = write(fold(Some(s), &ev("Interrupt"), Agent::Codex, 5));
+        assert_eq!(s.state, State::Ready);
+    }
+
+    #[test]
+    fn other_agents_are_named_next_to_the_project() {
+        let mut a = done("1111", 1, 9);
+        a.cwd = "/x/cota".into();
+        let mut b = a.clone();
+        b.id = "2222".into();
+        b.agent = Agent::Codex;
+        let names = display_names(&[a, b]);
+        assert_eq!(names["1111"], "cota");
+        assert_eq!(names["2222"], "cota (Codex)");
     }
 
     #[test]
@@ -618,6 +720,6 @@ mod tests {
         a.cwd = "/x/cota".into();
         b.cwd = "/y/cota".into();
         let names = display_names(&[a, b]);
-        assert_eq!(names["1111"], "cota (1111)");
+        assert_eq!(names["1111"], "cota #1111");
     }
 }

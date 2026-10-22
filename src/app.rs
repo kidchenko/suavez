@@ -6,6 +6,7 @@
 //! used, and on a slow tick that ages out stale sessions and keeps the
 //! "3m ago" labels honest.
 
+use crate::agent::Agent;
 use crate::config::Config;
 use crate::icon::{self, Face};
 use crate::log::{lerror, linfo, lwarn};
@@ -23,7 +24,7 @@ const ID_SESSION: &str = "s:";
 const ID_SEEN_ALL: &str = "seen-all";
 const ID_NOTIFY_DONE: &str = "notify-done";
 const ID_NOTIFY_NEEDS: &str = "notify-needs";
-const ID_CONNECT: &str = "connect";
+const ID_CONNECT: &str = "connect:";
 const ID_FORGET: &str = "forget";
 const ID_EDIT: &str = "edit-config";
 const ID_AUTOSTART: &str = "autostart";
@@ -52,7 +53,8 @@ pub struct App {
     dark_taskbar: bool,
     sessions: Vec<Session>,
     tracker: Tracker,
-    connected: bool,
+    /// Agents whose hooks are in place, as of the last look.
+    connected: Vec<Agent>,
 
     // What is on screen, so a scan only repaints what changed.
     face: Face,
@@ -85,52 +87,66 @@ impl App {
             dark_taskbar,
             sessions: Vec::new(),
             tracker: Tracker::default(),
-            connected: false,
+            connected: Vec::new(),
             face: Face::Idle,
             menu_sig: String::new(),
             cfg_mtime: Config::modified(),
         };
-        app.first_run();
-        match hooks::repoint() {
-            Ok(true) => linfo!("hooks pointed at this copy of the binary"),
-            Ok(false) => {}
-            Err(e) => lwarn!("could not check the hooks: {e}"),
+        app.connect_new_agents();
+        for i in hooks::installed() {
+            match i.repoint() {
+                Ok(true) => linfo!("{} hooks brought up to date", i.agent.slug()),
+                Ok(false) => {}
+                Err(e) => lwarn!("could not check the {} hooks: {e}", i.agent.slug()),
+            }
         }
-        app.connected = hooks::is_installed();
+        app.refresh_connections();
         app.scan();
         Ok(app)
     }
 
-    /// The first launch connects to Claude Code by itself: it is the one thing
-    /// the app is for, and asking first would be a dialog nobody says no to.
-    /// Done once, so "Connect to Claude Code" unticked stays unticked.
-    fn first_run(&mut self) {
-        if self.cfg.hooks_offered {
-            return;
-        }
-        self.cfg.hooks_offered = true;
-        self.save();
-        if hooks::is_installed() {
-            return;
-        }
-        match hooks::install() {
-            Ok(()) => {
-                linfo!("first run: hooks installed");
-                notify::show(
-                    "Sua Vez is connected to Claude Code",
-                    "The bubble lights up when Claude finishes or needs you.",
-                    Some("Takes effect in new Claude Code sessions."),
-                );
+    /// Connect to each agent the first time it turns up installed: it is the
+    /// one thing the app is for, and asking first would be a dialog nobody
+    /// says no to. Once per agent, so unticking "Connect to …" sticks. Runs on
+    /// the tick as well, so an agent installed later is picked up without a
+    /// restart.
+    fn connect_new_agents(&mut self) {
+        for i in &hooks::INTEGRATIONS {
+            if self.cfg.offered.contains(&i.agent) || !i.available() {
+                continue;
             }
-            Err(e) => {
-                lerror!("first run: could not install hooks: {e}");
-                notify::show(
-                    "Sua Vez could not connect to Claude Code",
-                    &e,
-                    Some("Try \"Connect to Claude Code\" in the menu."),
-                );
+            self.cfg.offered.push(i.agent);
+            self.save();
+            if i.is_installed() {
+                continue;
             }
+            match i.install() {
+                Ok(()) => {
+                    linfo!("connected to {} on first sight", i.agent.slug());
+                    notify::show(
+                        &format!("Sua Vez is connected to {}", i.label()),
+                        &format!(
+                            "The bubble lights up when {} finishes or needs you.",
+                            i.agent.name()
+                        ),
+                        Some("Takes effect in new sessions."),
+                    );
+                }
+                Err(e) => {
+                    lerror!("could not connect to {}: {e}", i.agent.slug());
+                    notify::show(
+                        &format!("Sua Vez could not connect to {}", i.label()),
+                        &e,
+                        Some("Try \"Connect to\" in the menu."),
+                    );
+                }
+            }
+            self.refresh_connections();
         }
+    }
+
+    fn refresh_connections(&mut self) {
+        self.connected = hooks::installed().iter().map(|i| i.agent).collect();
     }
 
     pub fn handle(&mut self, event: UserEvent) -> Flow {
@@ -160,7 +176,6 @@ impl App {
                 self.cfg.notify_needs_you = !self.cfg.notify_needs_you;
                 self.save();
             }
-            ID_CONNECT => self.toggle_connection(),
             ID_FORGET => {
                 linfo!("forgetting all sessions");
                 session::remove_all();
@@ -175,7 +190,9 @@ impl App {
                 }
             }
             other => {
-                if let Some(sid) = other.strip_prefix(ID_SESSION) {
+                if let Some(agent) = other.strip_prefix(ID_CONNECT).and_then(Agent::parse) {
+                    self.toggle_connection(agent);
+                } else if let Some(sid) = other.strip_prefix(ID_SESSION) {
                     if let Some(s) = self.sessions.iter().find(|s| s.id == sid) {
                         self.tracker.mark_seen(s);
                         if let Some(t) = &s.terminal {
@@ -194,6 +211,7 @@ impl App {
 
     pub fn tick(&mut self) {
         self.reload_if_edited();
+        self.connect_new_agents();
         let dark = theme::taskbar_is_dark();
         if dark != self.dark_taskbar {
             self.dark_taskbar = dark;
@@ -254,36 +272,39 @@ impl App {
         self.repaint(false);
     }
 
-    fn toggle_connection(&mut self) {
-        let result = if self.connected {
-            hooks::uninstall()
-        } else {
-            hooks::install()
-        };
+    fn toggle_connection(&mut self, agent: Agent) {
+        let Some(i) = hooks::get(agent) else { return };
+        let was = self.connected.contains(&agent);
+        let result = if was { i.uninstall() } else { i.install() };
+        self.refresh_connections();
         match result {
             Ok(()) => {
-                self.connected = !self.connected;
                 linfo!(
-                    "hooks {}",
-                    if self.connected {
-                        "installed"
-                    } else {
-                        "removed"
-                    }
+                    "{} hooks {}",
+                    agent.slug(),
+                    if was { "removed" } else { "installed" }
                 );
                 notify::show(
-                    if self.connected {
-                        "Connected to Claude Code"
-                    } else {
-                        "Disconnected from Claude Code"
-                    },
-                    "Takes effect in new Claude Code sessions.",
+                    &format!(
+                        "{} {}",
+                        if was {
+                            "Disconnected from"
+                        } else {
+                            "Connected to"
+                        },
+                        i.label()
+                    ),
+                    "Takes effect in new sessions.",
                     None,
                 );
             }
             Err(e) => {
                 lerror!("{e}");
-                notify::show("Sua Vez could not change Claude Code's settings", &e, None);
+                notify::show(
+                    &format!("Sua Vez could not change {}'s settings", agent.product()),
+                    &e,
+                    None,
+                );
             }
         }
     }
@@ -362,11 +383,11 @@ impl App {
     }
 
     fn header(&self) -> String {
-        if !self.connected {
-            return "Not connected to Claude Code".into();
+        if self.connected.is_empty() {
+            return "Not connected to any coding agent".into();
         }
         if self.sessions.is_empty() {
-            return "No Claude Code sessions".into();
+            return "No sessions".into();
         }
         let count = |state| self.sessions.iter().filter(|s| s.state == state).count();
         let parts: Vec<String> = [
@@ -436,7 +457,7 @@ impl App {
         let rows = self.rows();
         let autostart_on = autostart::is_enabled();
         let sig = format!(
-            "{header}|{rows:?}|{}{}{}{autostart_on}",
+            "{header}|{rows:?}|{:?}{}{}{autostart_on}",
             self.connected, self.cfg.notify_done, self.cfg.notify_needs_you
         );
         // Rebuilding closes an open menu on some platforms, so only when
@@ -475,14 +496,14 @@ impl App {
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&CheckMenuItem::with_id(
             ID_NOTIFY_DONE,
-            "Notify when Claude finishes",
+            "Notify when it's your turn",
             true,
             self.cfg.notify_done,
             None,
         ));
         let _ = menu.append(&CheckMenuItem::with_id(
             ID_NOTIFY_NEEDS,
-            "Notify when Claude needs you",
+            "Notify when an agent needs you",
             true,
             self.cfg.notify_needs_you,
             None,
@@ -494,13 +515,21 @@ impl App {
             None,
         ));
         let _ = menu.append(&PredefinedMenuItem::separator());
-        let _ = menu.append(&CheckMenuItem::with_id(
-            ID_CONNECT,
-            "Connect to Claude Code",
-            true,
-            self.connected,
-            None,
-        ));
+        // One toggle per agent that is installed, or that is connected even
+        // though its folder has gone (so the hooks can still be taken out).
+        for i in &hooks::INTEGRATIONS {
+            let on = self.connected.contains(&i.agent);
+            if !on && !i.available() {
+                continue;
+            }
+            let _ = menu.append(&CheckMenuItem::with_id(
+                format!("{ID_CONNECT}{}", i.agent.slug()),
+                format!("Connect to {}", i.label()),
+                true,
+                on,
+                None,
+            ));
+        }
         let _ = menu.append(&CheckMenuItem::with_id(
             ID_AUTOSTART,
             "Run at login",
@@ -515,12 +544,12 @@ impl App {
     }
 }
 
-/// The menu row for a blocked session. "Claude needs your permission to use
-/// Bash" reads better as "cota wants to use Bash".
+/// The menu row for a blocked session. "Codex needs your permission to use
+/// Bash" reads better as "cota wants to use Bash", whichever agent said it.
 fn blocked_line(name: &str, message: &str) -> String {
-    const PREFIX: &str = "Claude needs your permission to use ";
-    if let Some(tool) = message.strip_prefix(PREFIX) {
-        return format!("{name} wants to use {tool}");
+    const MIDDLE: &str = " needs your permission to use ";
+    if let Some(i) = message.find(MIDDLE) {
+        return format!("{name} wants to use {}", &message[i + MIDDLE.len()..]);
     }
     if message.is_empty() {
         return format!("{name} needs you");

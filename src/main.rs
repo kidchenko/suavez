@@ -1,13 +1,15 @@
 // No console window: this is a tray app. No-op off Windows.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
-//! Sua Vez ("your turn") lights up in the tray when a Claude Code session
-//! finishes or is blocked waiting on you, on both Windows and macOS.
+//! Sua Vez ("your turn") lights up in the tray when a coding agent session
+//! (Claude Code, Codex, Gemini CLI or Devin) finishes or is blocked waiting on
+//! you, on both Windows and macOS.
 //!
 //! | module            | responsibility                                       |
 //! |-------------------|------------------------------------------------------|
+//! | `agent`           | the agents Sua Vez knows                             |
 //! | `session`         | hook events → per-session state; what to announce    |
-//! | `hooks`           | Sua Vez's entries in Claude Code's settings.json     |
+//! | `hooks`           | Sua Vez's entries in each agent's hooks config       |
 //! | `config`          | the persisted preferences                            |
 //! | `icon`            | draws the bubble                                     |
 //! | `notify`          | toasts                                               |
@@ -16,9 +18,10 @@
 //! | `autostart`       | run at login                                         |
 //! | `terminal`        | finds a session's terminal and brings it forward     |
 //!
-//! The same binary is the hook: Claude Code runs `suavez hook` with the event
-//! on stdin, and that process updates a file and pokes the tray.
+//! The same binary is the hook: the agent runs `suavez hook` with the event on
+//! stdin, and that process updates a file and pokes the tray.
 
+mod agent;
 mod app;
 mod autostart;
 mod config;
@@ -32,26 +35,30 @@ mod terminal;
 mod theme;
 mod util;
 
+use agent::Agent;
 use app::{App, Flow, UserEvent};
 use log::{lerror, linfo, lwarn};
 use tao::event::{Event, StartCause};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
 
 const USAGE: &str = "\
-Sua Vez: a tray icon that lights up when Claude Code finishes or needs you.
+Sua Vez: a tray icon that lights up when your coding agent finishes or needs you.
+Works with Claude Code, Codex, Gemini CLI and Devin.
 
 usage:
-  suavez              run in the tray (or summon the running copy)
-  suavez install      connect to Claude Code (adds hooks to settings.json)
-  suavez uninstall    disconnect from Claude Code
-  suavez status       print what every session is doing
-  suavez hook         what Claude Code runs; reads the event on stdin";
+  suavez                    run in the tray (or summon the running copy)
+  suavez install [agent]    connect to every installed agent, or just one
+  suavez uninstall [agent]  disconnect from every agent, or just one
+  suavez status             print connections and what every session is doing
+  suavez hook [--agent a]   what the agents run; reads the event on stdin
+
+agents: claude, codex, gemini (Devin uses Claude Code's hooks)";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         None => tray(),
-        Some("hook") => hook(),
+        Some("hook") => hook(&args[1..]),
         Some("--dump-icons") => {
             let dir = args.get(1).map(String::as_str).unwrap_or("target/icons");
             std::process::exit(match icon::dump(dir) {
@@ -61,52 +68,118 @@ fn main() {
         }
         Some(cmd) => {
             util::attach_console();
-            std::process::exit(cli(cmd));
+            std::process::exit(cli(cmd, args.get(1).map(String::as_str)));
         }
     }
 }
 
-/// Runs inside Claude Code's turn, so: fast, silent on stdout (Claude Code
-/// reads some hooks' stdout as context), and exit 0 whatever happens. A hook
-/// that fails must never be the reason Claude stops.
-fn hook() {
+/// Which agent is calling. `--agent` when the hook entry says so; otherwise
+/// Claude Code's entry, which Devin also loads, so Devin is told apart by the
+/// variable it sets for its hooks.
+fn calling_agent(args: &[String]) -> Agent {
+    let flag = args
+        .iter()
+        .position(|a| a == "--agent")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|a| Agent::parse(a));
+    flag.unwrap_or_else(|| {
+        if std::env::var_os("DEVIN_PROJECT_DIR").is_some() {
+            Agent::Devin
+        } else {
+            Agent::Claude
+        }
+    })
+}
+
+/// Runs inside the agent's turn, so: fast, exit 0 whatever happens, and quiet
+/// on stdout except where the agent insists on JSON. A hook that fails must
+/// never be the reason the agent stops.
+fn hook(args: &[String]) {
     use std::io::Read;
     log::init(false);
+    let agent = calling_agent(args);
     let mut input = String::new();
     // Hook payloads are a few hundred bytes; the cap is against a runaway pipe.
     let _ = std::io::stdin().take(1 << 20).read_to_string(&mut input);
-    if let Err(e) = session::ingest(&input, util::now_unix()) {
-        lwarn!("hook: {e}");
+    if let Err(e) = session::ingest(&input, agent, util::now_unix()) {
+        lwarn!("hook ({}): {e}", agent.slug());
     }
     single_instance::poke_changed();
+    if agent.wants_json_reply() {
+        // An empty object: no decision, no context, carry on.
+        println!("{{}}");
+    }
 }
 
-fn cli(cmd: &str) -> i32 {
-    match cmd {
-        "install" => match hooks::install() {
-            Ok(()) => {
-                println!("Connected to Claude Code.");
-                if let Some(p) = hooks::settings_path() {
-                    println!("  hooks added to {}", p.display());
+/// The integrations a CLI command applies to: the one named, or with no name,
+/// every installed agent (Claude Code if none is found, as before agents
+/// were plural).
+fn targets(
+    which: Option<&str>,
+    only_available: bool,
+) -> Result<Vec<&'static hooks::Integration>, String> {
+    match which {
+        Some(name) => {
+            let agent = Agent::parse(name).ok_or(format!(
+                "unknown agent '{name}' (try claude, codex or gemini)"
+            ))?;
+            if agent == Agent::Devin {
+                return Err("Devin uses Claude Code's hooks: run `suavez install claude`".into());
+            }
+            Ok(hooks::get(agent).into_iter().collect())
+        }
+        None if only_available => {
+            let found: Vec<_> = hooks::INTEGRATIONS
+                .iter()
+                .filter(|i| i.available())
+                .collect();
+            Ok(if found.is_empty() {
+                hooks::get(Agent::Claude).into_iter().collect()
+            } else {
+                found
+            })
+        }
+        None => Ok(hooks::INTEGRATIONS.iter().collect()),
+    }
+}
+
+fn cli(cmd: &str, arg: Option<&str>) -> i32 {
+    let run =
+        |only_available: bool, act: fn(&hooks::Integration) -> Result<(), String>, done: &str| {
+            let list = match targets(arg, only_available) {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("suavez: {e}");
+                    return 2;
                 }
-                println!("  Takes effect in new Claude Code sessions.");
-                0
+            };
+            let mut code = 0;
+            for i in list {
+                match act(i) {
+                    Ok(()) => {
+                        let path = i
+                            .settings_path()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_default();
+                        println!("{done} {}  ({path})", i.label());
+                    }
+                    Err(e) => {
+                        eprintln!("suavez: {}: {e}", i.label());
+                        code = 1;
+                    }
+                }
             }
-            Err(e) => {
-                eprintln!("suavez: {e}");
-                1
+            code
+        };
+    match cmd {
+        "install" => {
+            let code = run(true, hooks::Integration::install, "Connected to");
+            if code == 0 {
+                println!("Takes effect in new sessions.");
             }
-        },
-        "uninstall" => match hooks::uninstall() {
-            Ok(()) => {
-                println!("Disconnected from Claude Code.");
-                0
-            }
-            Err(e) => {
-                eprintln!("suavez: {e}");
-                1
-            }
-        },
+            code
+        }
+        "uninstall" => run(false, hooks::Integration::uninstall, "Disconnected from"),
         "status" => {
             status();
             0
@@ -129,17 +202,20 @@ fn cli(cmd: &str) -> i32 {
 fn status() {
     let now = util::now_unix();
     let cfg = config::Config::load();
-    println!(
-        "Claude Code hooks: {}",
-        if hooks::is_installed() {
+    for i in &hooks::INTEGRATIONS {
+        let state = if i.is_installed() {
             "connected"
-        } else {
+        } else if i.available() {
             "not connected (run `suavez install`)"
-        }
-    );
+        } else {
+            "not installed"
+        };
+        println!("{:<24} {state}", i.label());
+    }
     let sessions = session::load_all(now, cfg.stale_hours * 3600);
+    println!();
     if sessions.is_empty() {
-        println!("No Claude Code sessions.");
+        println!("No sessions.");
         return;
     }
     let names = session::display_names(&sessions);
@@ -151,7 +227,7 @@ fn status() {
             session::State::Ready => "ready",
         };
         println!(
-            "  {:<28} {:<10} {:>8}  {}",
+            "  {:<32} {:<10} {:>8}  {}",
             names[&s.id],
             state,
             util::ago(now.saturating_sub(s.since)),

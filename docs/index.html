@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sua Vez: know when Claude Code is done</title>
-<meta name="description" content="A speech bubble in the tray that turns green when Claude Code finishes and amber when it's waiting on you. For Windows and macOS. Free and open source.">
+<title>Sua Vez: know when your coding agent is done</title>
+<meta name="description" content="A speech bubble in the tray that turns green when Claude Code, Codex, Gemini CLI or Devin finishes, and amber when it's waiting on you. For Windows and macOS. Free and open source.">
 <link rel="icon" href="img/icon-256.png" type="image/png">
 
-<meta property="og:title" content="Sua Vez: know when Claude Code is done">
-<meta property="og:description" content="A tray bubble that lights up when Claude Code finishes or needs you. For Windows and macOS.">
+<meta property="og:title" content="Sua Vez: know when your coding agent is done">
+<meta property="og:description" content="A tray bubble that lights up when your coding agent finishes or needs you. Claude Code, Codex, Gemini CLI and Devin, on Windows and macOS.">
 <meta property="og:image" content="img/icon-256.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
@@ -87,6 +87,7 @@
   }
   .tagline { font-size: clamp(1.12rem, 3.6vw, 1.45rem); color: var(--dim); margin: 14px auto 0; max-width: 36ch; }
   .pt { color: var(--faint); font-size: .95rem; margin: 10px 0 0; }
+  .agents { color: var(--accent); font-weight: 600; font-size: .98rem; margin: 18px 0 0; letter-spacing: .01em; }
 
   .cta { margin: 36px 0 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
   .download {
@@ -222,7 +223,8 @@
 <header class="wrap">
   <img class="mark" src="img/icon-256.png" alt="" width="128" height="128">
   <h1>Sua Vez</h1>
-  <p class="tagline">Your tray lights up when Claude Code finishes, or when it's stuck waiting on you.</p>
+  <p class="tagline">Your tray lights up when your coding agent finishes, or when it's stuck waiting on you.</p>
+  <p class="agents">Claude Code · Codex · Gemini CLI · Devin</p>
   <p class="pt"><i>sua vez</i> is Portuguese for <i>your turn</i></p>
 
   <div class="cta">
@@ -235,19 +237,22 @@
 
 <div class="wrap demo" aria-label="Interactive preview of Sua Vez">
   <div class="menu" role="menu" id="menu">
-    <div class="row head"><span></span><span id="header">1 working</span><span></span></div>
+    <div class="row head"><span></span><span id="header">2 working</span><span></span></div>
     <div class="sep"></div>
     <button class="row" id="row-cota" role="menuitem" disabled><span class="mark" id="mark-cota"></span><span id="text-cota">cota: ready</span><span class="when" id="when-cota"></span></button>
-    <div class="row"><span class="mark">…</span><span>presence-sync is working</span><span class="when">6m</span></div>
+    <div class="row"><span class="mark">…</span><span>porta (Codex) is working</span><span class="when">3m</span></div>
+    <div class="row"><span class="mark">…</span><span>presence-sync (Gemini) is working</span><span class="when">6m</span></div>
     <div class="sep"></div>
     <button class="row" id="seen-all" role="menuitem" disabled><span></span><span>Mark all as seen</span><span></span></button>
     <div class="row"><span></span><span>Forget all sessions</span><span></span></div>
     <div class="sep"></div>
-    <div class="row on"><span class="chk">✓</span><span>Notify when Claude finishes</span><span></span></div>
-    <div class="row on"><span class="chk">✓</span><span>Notify when Claude needs you</span><span></span></div>
+    <div class="row on"><span class="chk">✓</span><span>Notify when it's your turn</span><span></span></div>
+    <div class="row on"><span class="chk">✓</span><span>Notify when an agent needs you</span><span></span></div>
     <div class="row"><span></span><span>Edit settings…</span><span></span></div>
     <div class="sep"></div>
-    <div class="row on"><span class="chk">✓</span><span>Connect to Claude Code</span><span></span></div>
+    <div class="row on"><span class="chk">✓</span><span>Connect to Claude Code and Devin</span><span></span></div>
+    <div class="row on"><span class="chk">✓</span><span>Connect to Codex</span><span></span></div>
+    <div class="row on"><span class="chk">✓</span><span>Connect to Gemini CLI</span><span></span></div>
     <div class="row on"><span class="chk">✓</span><span>Run at login</span><span></span></div>
     <div class="sep"></div>
     <div class="row"><span></span><span>Quit Sua Vez</span><span></span></div>
@@ -270,13 +275,13 @@
 <main class="wrap">
   <section>
     <h2>Stop checking the terminal</h2>
-    <p class="lede">Give Claude a task, go do something else, and come back when it's your move instead of every few minutes.</p>
+    <p class="lede">Give an agent a task, go do something else, and come back when it's your move instead of every few minutes.</p>
     <div class="grid">
-      <div class="card"><span class="ico">✅</span><h3>When Claude finishes</h3><p>The bubble turns green and a notification says which project is waiting and how long the turn took.</p></div>
-      <div class="card"><span class="ico">✋</span><h3>When Claude is blocked</h3><p>A permission prompt or a question turns it amber, so a task doesn't sit for twenty minutes on a yes or no.</p></div>
-      <div class="card"><span class="ico">🗂</span><h3>Every session at once</h3><p>The menu lists each open session by project folder, most urgent first. Click one to bring its terminal to the front.</p></div>
+      <div class="card"><span class="ico">✅</span><h3>When the agent finishes</h3><p>The bubble turns green and a notification says which project is waiting and how long the turn took.</p></div>
+      <div class="card"><span class="ico">✋</span><h3>When it's blocked</h3><p>A permission prompt or a question turns it amber, so a task doesn't sit for twenty minutes on a yes or no.</p></div>
+      <div class="card"><span class="ico">🗂</span><h3>Every agent at once</h3><p>Claude Code, Codex, Gemini CLI and Devin sessions share one menu, most urgent first. Click one to bring its terminal to the front.</p></div>
       <div class="card"><span class="ico">🔕</span><h3>Quiet while you watch</h3><p>Turns under 30 seconds and prompts you answer within 8 seconds don't notify. You were already looking.</p></div>
-      <div class="card"><span class="ico">🔌</span><h3>Sets itself up</h3><p>The first launch adds its hooks to Claude Code's settings and leaves everything else in that file as it was.</p></div>
+      <div class="card"><span class="ico">🔌</span><h3>Sets itself up</h3><p>It connects to each agent it finds installed, including ones you add later, and leaves the rest of their settings as they were.</p></div>
       <div class="card"><span class="ico">🪶</span><h3>Light</h3><p>Under 1 MB on disk and about 2 MB of memory. The hook it runs finishes in around 50 ms.</p></div>
     </div>
   </section>
@@ -286,22 +291,22 @@
     <p class="lede">With several sessions open, the bubble shows the most urgent one.</p>
     <div class="faces">
       <div class="face"><div class="chip"><img src="img/bubble-idle.png" alt=""></div><div><b>Outline</b><span>Nothing going on.</span></div></div>
-      <div class="face"><div class="chip"><img src="img/bubble-working.png" alt=""></div><div><b>Dots</b><span>Claude is working.</span></div></div>
-      <div class="face"><div class="chip"><img src="img/bubble-turn.png" alt=""></div><div><b>Green</b><span>Claude finished. Your turn.</span></div></div>
-      <div class="face"><div class="chip"><img src="img/bubble-needs.png" alt=""></div><div><b>Amber</b><span>Claude is waiting on a permission prompt or a question.</span></div></div>
+      <div class="face"><div class="chip"><img src="img/bubble-working.png" alt=""></div><div><b>Dots</b><span>An agent is working.</span></div></div>
+      <div class="face"><div class="chip"><img src="img/bubble-turn.png" alt=""></div><div><b>Green</b><span>An agent finished. Your turn.</span></div></div>
+      <div class="face"><div class="chip"><img src="img/bubble-needs.png" alt=""></div><div><b>Amber</b><span>An agent is waiting on a permission prompt or a question.</span></div></div>
     </div>
   </section>
 
   <section>
     <h2>How it works</h2>
     <div class="how">
-      <p>Claude Code can run a command on certain events, called <b>hooks</b>. Sua Vez registers itself for six of them, from a prompt being submitted to a session ending.</p>
+      <p>Claude Code, Codex, Gemini CLI and Devin can each run a command on certain events, called <b>hooks</b>. Sua Vez registers itself for the ones that matter, from a prompt being submitted to a session ending.</p>
       <ol>
-        <li>Claude Code runs <code>suavez hook</code> and passes it the event.</li>
+        <li>The agent runs <code>suavez hook</code> and passes it the event.</li>
         <li>That process writes a small file for the session and pokes the tray.</li>
         <li>The tray rereads the files and repaints the bubble.</li>
       </ol>
-      <p>The hook prints nothing and always exits cleanly, so a failure in Sua Vez never stops Claude. When it edits <code>settings.json</code>, it only touches its own entries. Your other hooks and settings keep their place.</p>
+      <p>The hook always exits cleanly, so a failure in Sua Vez never stops an agent. When it edits an agent's settings, it only touches its own entries. Your other hooks and settings keep their place. Devin needs nothing extra: it reads Claude Code's hooks.</p>
       <p>Disconnect any time from the menu, or with <code>suavez uninstall</code> in a terminal.</p>
     </div>
   </section>
@@ -315,7 +320,7 @@
       <tr><td>macOS</td><td><a href="https://github.com/kidchenko/suavez/releases/latest/download/SuaVez.dmg">SuaVez.dmg</a> (Apple silicon and Intel)</td></tr>
       <tr><td>Homebrew</td><td><code>brew install --cask kidchenko/tap/suavez</code></td></tr>
     </table>
-    <p class="alt" style="text-align:left">Windows 10 or later, macOS 11 or later, and Claude Code. Under 1 MB, no runtime to install. Launch it once after installing, and restart any Claude Code sessions that were already open.</p>
+    <p class="alt" style="text-align:left">Windows 10 or later, macOS 11 or later, and at least one of Claude Code, Codex, Gemini CLI or Devin. Under 1 MB, no runtime to install. Launch it once after installing, and restart any agent sessions that were already open.</p>
   </section>
 </main>
 
@@ -374,7 +379,7 @@
       var parts = [];
       if (state === "needs") parts.push("1 needs you");
       if (state === "done") parts.push("1 your turn");
-      parts.push(state === "working" ? "2 working" : "1 working");
+      parts.push(state === "working" ? "3 working" : "2 working");
       header.textContent = parts.join(" · ");
 
       bubble.src = "img/bubble-" + (unseen ? (state === "needs" ? "needs" : "turn") : "working") + ".png";
@@ -413,7 +418,7 @@
     function markSeen() {
       seen = true;
       paint();
-      hint.textContent = "Seen. The bubble goes back to showing the other session.";
+      hint.textContent = "Seen. The bubble goes back to showing the other sessions.";
     }
     row.addEventListener("click", markSeen);
     seenAll.addEventListener("click", markSeen);

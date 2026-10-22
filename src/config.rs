@@ -5,6 +5,7 @@
 //! file per Claude Code session (see `session.rs`), plus the log and, on macOS,
 //! the instance socket.
 
+use crate::agent::Agent;
 use crate::log::{lerror, linfo};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -25,9 +26,13 @@ pub struct Config {
     /// Sessions that have not reported anything for this long are dropped.
     /// Covers a terminal closed without Claude Code getting to say goodbye.
     pub stale_hours: u64,
-    /// Whether the first launch has offered to connect to Claude Code. Set
-    /// once, so disconnecting from the menu sticks across restarts.
+    /// From before Sua Vez knew other agents: true meant Claude Code had been
+    /// offered. Read for that, folded into `offered`.
     pub hooks_offered: bool,
+    /// Agents Sua Vez has connected to by itself once already. It does so the
+    /// first time it finds each one installed, and never again, so
+    /// disconnecting one from the menu sticks.
+    pub offered: Vec<Agent>,
 }
 
 impl Default for Config {
@@ -39,6 +44,7 @@ impl Default for Config {
             grace_seconds: 8,
             stale_hours: 8,
             hooks_offered: false,
+            offered: Vec::new(),
         }
     }
 }
@@ -112,6 +118,9 @@ impl Config {
         self.min_turn_seconds = self.min_turn_seconds.min(3600);
         self.grace_seconds = self.grace_seconds.min(600);
         self.stale_hours = self.stale_hours.clamp(1, 7 * 24);
+        if self.hooks_offered && !self.offered.contains(&Agent::Claude) {
+            self.offered.push(Agent::Claude);
+        }
         self
     }
 }
@@ -126,6 +135,14 @@ mod tests {
         assert!(!c.notify_done);
         assert!(c.notify_needs_you);
         assert_eq!(c.min_turn_seconds, 30);
+    }
+
+    #[test]
+    fn the_old_claude_only_flag_carries_over() {
+        let c = Config::parse(r#"{"hooksOffered": true}"#).unwrap();
+        assert_eq!(c.offered, vec![Agent::Claude]);
+        let c = Config::parse(r#"{"offered": ["codex"]}"#).unwrap();
+        assert_eq!(c.offered, vec![Agent::Codex]);
     }
 
     #[test]

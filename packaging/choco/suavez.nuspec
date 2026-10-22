@@ -13,16 +13,18 @@
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <projectSourceUrl>https://github.com/kidchenko/suavez</projectSourceUrl>
     <bugTrackerUrl>https://github.com/kidchenko/suavez/issues</bugTrackerUrl>
-    <tags>suavez claude claude-code ai notifications tray developer-tools</tags>
-    <summary>A tray icon that lights up when Claude Code finishes or needs you</summary>
+    <tags>suavez claude claude-code codex gemini devin ai notifications tray developer-tools</tags>
+    <summary>A tray icon that lights up when your coding agent finishes or needs you</summary>
     <description><![CDATA[
-A speech bubble in the notification area for Claude Code.
+A speech bubble in the notification area for Claude Code, Codex, Gemini CLI
+and Devin.
 
 * Turns green when a session finishes, with a notification.
-* Turns amber when Claude is blocked on a permission prompt or a question.
-* Lists every open session by project folder, most urgent first.
+* Turns amber when an agent is blocked on a permission prompt or a question.
+* Lists every open session by project folder, most urgent first; click one to
+  bring its terminal forward.
 * Stays quiet for quick turns and for prompts you answer right away.
-* Adds its hooks to Claude Code's settings on first launch, and the uninstaller
+* Adds its hooks to each installed agent's settings, and the uninstaller
   removes them.
 
 A single small executable with no runtime dependencies.
