@@ -259,6 +259,7 @@ fn tray() {
     {
         use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS};
         event_loop.set_activation_policy(ActivationPolicy::Accessory);
+        event_loop.set_activate_ignoring_other_apps(false);
     }
     let proxy = event_loop.create_proxy();
 
@@ -273,14 +274,18 @@ fn tray() {
 
     event_loop.run(move |event, _target, control_flow| {
         match event {
-            Event::NewEvents(StartCause::Init) => match App::new(proxy.clone()) {
-                Ok(a) => app = Some(a),
-                Err(e) => {
-                    lerror!("{e}");
-                    *control_flow = ControlFlow::Exit;
-                    return;
+            Event::NewEvents(StartCause::Init) => {
+                #[cfg(target_os = "macos")]
+                drop_launch_activation();
+                match App::new(proxy.clone()) {
+                    Ok(a) => app = Some(a),
+                    Err(e) => {
+                        lerror!("{e}");
+                        *control_flow = ControlFlow::Exit;
+                        return;
+                    }
                 }
-            },
+            }
             Event::UserEvent(e) => {
                 if let Some(a) = app.as_mut() {
                     if a.handle(e) == Flow::Exit {
@@ -302,4 +307,17 @@ fn tray() {
             *control_flow = ControlFlow::WaitUntil(a.next_wake());
         }
     });
+}
+
+/// tao asks macOS to activate the app as it finishes launching. A menu bar
+/// app has nothing to bring forward, and on macOS 26 the request stays
+/// pending until the first click on the bubble, then completes while the menu
+/// is open and closes it. Withdraw it before anything is shown.
+#[cfg(target_os = "macos")]
+fn drop_launch_activation() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+    if let Some(mtm) = MainThreadMarker::new() {
+        NSApplication::sharedApplication(mtm).deactivate();
+    }
 }

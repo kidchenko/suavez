@@ -37,6 +37,8 @@ const ID_INERT: &str = "inert";
 /// The slow tick. Hook pokes carry the news; this only ages out sessions,
 /// refreshes minute labels, and is the fallback if a poke is ever lost.
 const TICK: Duration = Duration::from_secs(15);
+/// How often to retry a menu rebuild put off while the menu was open.
+const MENU_RETRY: Duration = Duration::from_secs(1);
 
 pub enum UserEvent {
     Menu(String),
@@ -65,6 +67,8 @@ pub struct App {
     // What is on screen, so a scan only repaints what changed.
     face: Face,
     menu_sig: String,
+    /// A rebuild was put off because the menu was open.
+    menu_stale: bool,
 
     /// The config file's mtime as of our last read or write: anything newer is
     /// a hand edit.
@@ -97,6 +101,7 @@ impl App {
             connected: Vec::new(),
             face: Face::Idle,
             menu_sig: String::new(),
+            menu_stale: false,
             cfg_mtime: Config::modified(),
         };
         if running_from_temporary_place() {
@@ -269,7 +274,8 @@ impl App {
     /// The slow tick, or sooner if a permission prompt's grace period ends
     /// first.
     pub fn next_wake(&self) -> Instant {
-        let tick = Instant::now() + TICK;
+        // Soon after the menu closes, so it never opens with old news.
+        let tick = Instant::now() + if self.menu_stale { MENU_RETRY } else { TICK };
         match self.tracker.next_due(&self.sessions, &self.rules()) {
             Some(due) => {
                 let wait = due.saturating_sub(now_unix());
@@ -550,6 +556,13 @@ impl App {
         if sig == self.menu_sig && !force {
             return;
         }
+        // Replacing the menu while it's open closes it on macOS. Try again
+        // shortly; the signature is left as it was, so the retry rebuilds.
+        if menu_is_open() {
+            self.menu_stale = true;
+            return;
+        }
+        self.menu_stale = false;
         self.menu_sig = sig;
         let _ = self.tray.set_tooltip(Some(format!("Sua Vez: {header}")));
 
@@ -668,6 +681,23 @@ fn blocked_line(name: &str, message: &str) -> String {
         s.push('\u{2026}');
     }
     format!("{name}: {s}")
+}
+
+/// Whether the tray menu is open right now. On macOS the run loop is in event
+/// tracking mode for exactly as long as a menu is being shown.
+#[cfg(target_os = "macos")]
+fn menu_is_open() -> bool {
+    use objc2_app_kit::NSEventTrackingRunLoopMode;
+    use objc2_foundation::NSRunLoop;
+    let mode = NSRunLoop::currentRunLoop().currentMode();
+    mode.is_some_and(|m| *m == *unsafe { NSEventTrackingRunLoopMode })
+}
+
+/// Windows has no such signal. Its tray menu runs a modal loop of its own,
+/// and this problem hasn't been seen there.
+#[cfg(windows)]
+fn menu_is_open() -> bool {
+    false
 }
 
 /// Windows menus treat `&` as an accelerator marker; a folder called

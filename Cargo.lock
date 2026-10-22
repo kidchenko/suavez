@@ -1526,6 +1526,9 @@ name = "suavez"
 version = "0.0.1"
 dependencies = [
  "libc",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "serde",
  "serde_json",
  "tao",

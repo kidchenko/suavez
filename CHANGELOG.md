@@ -5,6 +5,8 @@
 - No second notification for Claude Code sessions inside Claude Desktop, which
   already sends its own. The bubble still turns. Turn it off under
   **Settings → Quiet for Claude Desktop sessions**.
+- On macOS 26 the menu no longer closes the first time you open Settings after
+  launch, and it stays open while sessions update underneath it.
 
 ## [0.0.1] - 2026-10-22
 
