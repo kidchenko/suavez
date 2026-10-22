@@ -256,16 +256,17 @@ the PNGs.
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`
 
 The `release` workflow builds the DMG on macOS and the installer on Windows,
-publishes both to a GitHub Release, and rewrites the Chocolatey, winget and
-Homebrew manifests with the new version and checksums. Then:
+publishes both to a GitHub Release, and rewrites the Chocolatey and winget
+manifests with the new version and checksums. Then:
 
 - **Chocolatey** is pushed automatically when the `CHOCO_API_KEY` secret is set.
   New packages go through community moderation, so the first one takes a while.
 - **winget**: submit the `manifest-winget` artifact to
   [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs), or use
   `wingetcreate submit`.
-- **Homebrew**: copy the `manifest-homebrew` artifact to `Casks/suavez.rb` in
-  `kidchenko/homebrew-tap`.
+- **Homebrew**: [kidchenko/homebrew-tap](https://github.com/kidchenko/homebrew-tap)
+  bumps `Casks/suavez.rb` itself, right away when the `HOMEBREW_TAP_TOKEN` secret
+  is set and otherwise on its daily run.
 
 Running the workflow by hand from the Actions tab is a dry run: everything is
 built and uploaded as artifacts, and nothing is published.
