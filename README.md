@@ -102,6 +102,13 @@ Download [**SuaVez-Setup.exe**](https://github.com/kidchenko/suavez/releases/lat
 and run it. Each release also ships a portable `suavez-x.y.z-x64.exe` that runs
 without installing; see [Releases](https://github.com/kidchenko/suavez/releases).
 
+Or install the portable build with [Scoop](https://scoop.sh):
+
+```powershell
+scoop bucket add kidchenko https://github.com/kidchenko/scoop-bucket
+scoop install kidchenko/suavez
+```
+
 `winget install kidchenko.SuaVez` and `choco install suavez` are coming: both
 packages are waiting on review.
 
