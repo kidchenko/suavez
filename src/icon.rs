@@ -39,6 +39,14 @@ pub const EDGE: u32 = 32;
 const GRID: f32 = 32.0;
 const SS: u32 = 4;
 
+/// The tray bubble's share of the canvas. Sua Vez, Café, Porta and Cota sit
+/// side by side in the menu bar, so they share one keyline: centred, matched
+/// by height rather than by box (a wide glyph as tall as a narrow one looks
+/// the same size; one as wide looks smaller), with a 2.4 px stroke.
+const TRAY_SCALE: f32 = 0.92;
+/// Half the outline's width, in design units, so it is 1.2 px once scaled.
+const STROKE: f32 = 1.2 / TRAY_SCALE;
+
 type Rgb = [f32; 3];
 
 struct Palette {
@@ -77,7 +85,12 @@ fn palette(dark_taskbar: bool) -> Palette {
 /// RGBA8, `edge` x `edge`, straight alpha.
 pub fn render(face: Face, dark_taskbar: bool, edge: u32) -> Vec<u8> {
     let pal = palette(dark_taskbar);
-    supersample(edge, |x, y| sample(face, x, y, &pal))
+    supersample(edge, |x, y| {
+        // About the bubble's own centre, tail included.
+        let x = 16.0 + (x - 16.0) / TRAY_SCALE;
+        let y = 16.5 + (y - 16.0) / TRAY_SCALE;
+        sample(face, x, y, &pal)
+    })
 }
 
 fn supersample(edge: u32, f: impl Fn(f32, f32) -> Option<Rgb>) -> Vec<u8> {
@@ -138,8 +151,8 @@ fn bang(x: f32, y: f32) -> f32 {
 fn sample(face: Face, x: f32, y: f32, pal: &Palette) -> Option<Rgb> {
     let d = bubble(x, y);
     match face {
-        Face::Idle => (d.abs() - 1.2 <= 0.0).then_some(pal.line),
-        Face::Working => (d.abs() - 1.2 <= 0.0 || dots(x, y) <= 0.0).then_some(pal.line),
+        Face::Idle => (d.abs() - STROKE <= 0.0).then_some(pal.line),
+        Face::Working => (d.abs() - STROKE <= 0.0 || dots(x, y) <= 0.0).then_some(pal.line),
         Face::YourTurn => (d <= 0.0).then_some(pal.go),
         Face::NeedsYou => {
             if d > 0.0 {
