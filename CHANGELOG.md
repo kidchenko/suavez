@@ -1,10 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [0.0.3] - 2026-10-23
 
 - Icons in the menu, from Lucide: each session shows its state in the bubble's
   colours, and the actions have their own. **Quit** is ⌘Q and **Edit config
   file…** is ⌘, on macOS, and Settings ends with the version.
+- The bubble in the menu bar is sized and stroked like the icons of Cafe, Porta
+  and Cota, so they line up when they sit side by side.
 
 ## [0.0.2] - 2026-10-23
 
