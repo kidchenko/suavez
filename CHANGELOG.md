@@ -14,9 +14,8 @@
 - On macOS 26 the menu no longer closes the first time you open Settings after
   launch, and it stays open while sessions update underneath it.
 - `brew upgrade` no longer disconnects Sua Vez from your agents for good. The
-  cask runs the new `suavez uninstall --package`, which lets the next launch
-  reconnect, and starts the app after installing or upgrading. Upgrades also
-  keep **Run at login**.
+  cask runs the new `suavez uninstall --package`, so opening the app after an
+  upgrade reconnects it. Upgrades also keep **Run at login**.
 - `suavez status | head` ends quietly instead of crashing on the closed pipe.
 
 ## [0.0.1] - 2026-10-22
