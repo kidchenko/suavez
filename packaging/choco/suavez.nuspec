@@ -7,8 +7,9 @@
     <owners>kidchenko</owners>
     <title>Sua Vez</title>
     <authors>kidchenko</authors>
+    <copyright>Copyright (c) 2026 kidchenko</copyright>
     <projectUrl>https://github.com/kidchenko/suavez</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/kidchenko/suavez/main/assets/icon-256.png</iconUrl>
+    <iconUrl>https://cdn.jsdelivr.net/gh/kidchenko/suavez@e950d56d5e3c6b31fc96c5351a05718004989831/assets/icon-256.png</iconUrl>
     <licenseUrl>https://github.com/kidchenko/suavez/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <projectSourceUrl>https://github.com/kidchenko/suavez</projectSourceUrl>
