@@ -74,6 +74,10 @@ Everything you set once lives under **Settings ▸**:
 | **Forget all sessions** | For a session stuck on "working" after a terminal crashed. Live sessions come back with their next event. |
 | **Edit config file…** | Opens `config.json`. [See below.](#configuration) |
 
+**Check for updates…**, below Settings, opens Sua Vez's page in your browser
+with the version you have. The page asks GitHub for the latest release and
+tells you if there's a newer one. Sua Vez itself never goes online.
+
 ### When it notifies
 
 A notification for every reply would be noise when you're watching the

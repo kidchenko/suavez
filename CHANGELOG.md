@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Check for updates…**, above Quit, opens Sua Vez's web page with your
+  version, and the page tells you whether a newer one is out. The app itself
+  still never goes online.
+
 ## [0.0.3] - 2026-10-23
 
 - Icons in the menu, from Lucide: each session shows its state in the bubble's

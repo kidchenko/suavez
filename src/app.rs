@@ -35,6 +35,7 @@ const ID_CONNECT: &str = "connect:";
 const ID_FORGET: &str = "forget";
 const ID_EDIT: &str = "edit-config";
 const ID_AUTOSTART: &str = "autostart";
+const ID_UPDATES: &str = "check-updates";
 const ID_QUIT: &str = "quit";
 /// Shared by every read-only row; nothing dispatches on it.
 const ID_INERT: &str = "inert";
@@ -227,6 +228,10 @@ impl App {
                 self.scan();
             }
             ID_EDIT => open_config(),
+            ID_UPDATES => open_url(concat!(
+                "https://josebarbosa.dev/suavez/?v=",
+                env!("CARGO_PKG_VERSION")
+            )),
             ID_AUTOSTART => {
                 let want = !autostart::is_enabled();
                 match autostart::set(want) {
@@ -698,6 +703,12 @@ impl App {
 
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(&settings);
+        let _ = menu.append(&MenuItem::with_id(
+            ID_UPDATES,
+            "Check for updates\u{2026}",
+            true,
+            None,
+        ));
         let _ = menu.append(&IconMenuItem::with_id(
             ID_QUIT,
             "Quit Sua Vez",
@@ -786,6 +797,18 @@ fn open_config() {
         .spawn();
     if let Err(e) = spawned {
         lwarn!("could not open {}: {e}", path.display());
+    }
+}
+
+/// Open a page in the default browser. Sua Vez itself never goes online; the
+/// update check is the website's, comparing the version in the link.
+fn open_url(url: &str) {
+    #[cfg(windows)]
+    let spawned = std::process::Command::new("explorer.exe").arg(url).spawn();
+    #[cfg(target_os = "macos")]
+    let spawned = std::process::Command::new("/usr/bin/open").arg(url).spawn();
+    if let Err(e) = spawned {
+        lwarn!("could not open {url}: {e}");
     }
 }
 
