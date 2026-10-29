@@ -50,12 +50,24 @@ winresource = "0.1"
 # ---------------------------------------------------------------------------
 # `libc` is for localtime_r in the log stamp. objc2 is already in the tree via
 # tao and tray-icon; it's named here for the few AppKit calls Sua Vez makes
-# itself (see `drop_launch_activation` and `menu_is_open`).
+# itself (see `drop_launch_activation` and `menu_is_open`), and for
+# notifications that know when they are clicked (see `notify`).
 [target.'cfg(target_os = "macos")'.dependencies]
 libc             = "0.2"
+block2           = "0.6"
 objc2            = "0.6"
 objc2-app-kit    = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSRunLoop", "NSString", "NSUserDefaults"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSBundle", "NSError", "NSObject", "NSRunLoop", "NSString", "NSUserDefaults"] }
+objc2-user-notifications = { version = "0.3", default-features = false, features = [
+    "std",
+    "block2",
+    "UNNotification",
+    "UNNotificationContent",
+    "UNNotificationRequest",
+    "UNNotificationResponse",
+    "UNNotificationTrigger",
+    "UNUserNotificationCenter",
+] }
 
 [profile.release]
 opt-level     = "z"

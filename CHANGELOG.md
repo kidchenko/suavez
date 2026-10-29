@@ -5,6 +5,9 @@
 - **Check for updates…**, above Quit, opens Sua Vez's web page with your
   version, and the page tells you whether a newer one is out. The app itself
   still never goes online.
+- On macOS, clicking a notification brings the session's terminal to the front,
+  as it does on Windows, instead of opening Script Editor. Notifications now
+  come from Sua Vez itself, which asks once for permission.
 
 ## [0.0.3] - 2026-10-23
 

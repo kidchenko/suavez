@@ -51,7 +51,8 @@ from agents other than Claude Code carry the agent's name:
 Click a session to bring its terminal to the front, whether that's Windows
 Terminal, WezTerm, VS Code, iTerm or Terminal.app. Clicking also marks it as
 seen, and a seen session stops colouring the bubble until it finishes again.
-On Windows, clicking the session's notification does the same.
+Clicking the session's notification does the same. On macOS, Sua Vez asks
+once for permission to send notifications.
 
 In WezTerm you land on the session's own tab. Other terminals don't say which
 tab a session is in, so Sua Vez finds the app instead: with several tabs in one
@@ -290,9 +291,6 @@ built and uploaded as artifacts, and nothing is published.
 ## Not yet
 
 - Bringing the exact tab forward in terminals other than WezTerm.
-- Clickable notifications on macOS. They show, but clicking one opens Script
-  Editor, whose identity they borrow; a real click action needs a signed app
-  bundle.
 - Agents running inside WSL. Their hooks run on the Linux side and can't reach
   a Windows tray.
 - Cloud agents, such as Devin sessions started in the browser or Slack. There's

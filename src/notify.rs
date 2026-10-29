@@ -14,9 +14,9 @@ pub fn show(title: &str, line1: &str, line2: Option<&str>) {
 
 /// A notification that does `on_click` when clicked. On Windows that is
 /// certain while its banner is on screen; a click from the notification centre
-/// later goes through Windows, which may only relaunch the app. macOS shows it
-/// all the same, but clicking opens Script Editor (see below), so the click does
-/// nothing useful there yet.
+/// later goes through Windows, which may only relaunch the app. On macOS it
+/// holds while Sua Vez is running, banner or Notification Center, as long as it
+/// runs as SuaVez.app (see below).
 pub fn show_clickable(title: &str, line1: &str, line2: Option<&str>, on_click: OnClick) {
     imp::show(title, line1, line2, Some(on_click));
 }
@@ -90,18 +90,154 @@ mod imp {
 // macOS
 // ---------------------------------------------------------------------------
 //
-// `osascript`'s `display notification` is the analogue of borrowing PowerShell's
-// identity on Windows: it shows under Script Editor's name rather than Sua Vez's,
-// but it needs no bundle registration, no authorization prompt, and no
-// UserNotifications plumbing.
+// UserNotifications, so a click comes back to us: the delegate hears it and
+// runs the notification's `on_click`. It needs a bundle identifier, which only
+// SuaVez.app has, and asks once for permission. A bare binary (`cargo run`)
+// falls back to `osascript`'s `display notification`, the analogue of borrowing
+// PowerShell's identity on Windows: it shows under Script Editor's name, and
+// clicking it opens Script Editor.
 #[cfg(target_os = "macos")]
 mod imp {
+    use super::OnClick;
     use crate::log::{linfo, lwarn};
+    use block2::RcBlock;
+    use objc2::rc::Retained;
+    use objc2::runtime::{Bool, NSObject, NSObjectProtocol, ProtocolObject};
+    use objc2::{define_class, msg_send, ClassType};
+    use objc2_foundation::{NSBundle, NSError, NSString};
+    use objc2_user_notifications::{
+        UNAuthorizationOptions, UNMutableNotificationContent, UNNotification,
+        UNNotificationPresentationOptions, UNNotificationRequest, UNNotificationResponse,
+        UNUserNotificationCenter, UNUserNotificationCenterDelegate,
+    };
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Mutex, OnceLock};
 
-    /// `display notification` cannot carry a click action: clicking one
-    /// opens Script Editor, whose identity it borrows. A real click needs
-    /// UserNotifications and a signed bundle, which is for later.
-    pub fn show(title: &str, line1: &str, line2: Option<&str>, _on_click: Option<super::OnClick>) {
+    /// Clicks still to come, by notification identifier. Only the latest few:
+    /// one clicked after it has scrolled off this list does nothing.
+    static PENDING: Mutex<Vec<(String, OnClick)>> = Mutex::new(Vec::new());
+    const KEEP: usize = 32;
+
+    define_class!(
+        #[unsafe(super(NSObject))]
+        #[name = "SuaVezNotificationDelegate"]
+        struct Delegate;
+
+        unsafe impl NSObjectProtocol for Delegate {}
+
+        unsafe impl UNUserNotificationCenterDelegate for Delegate {
+            /// Show banners even when Sua Vez counts as the active app, which
+            /// it does for a moment after its menu is used.
+            #[unsafe(method(userNotificationCenter:willPresentNotification:withCompletionHandler:))]
+            fn will_present(
+                &self,
+                _center: &UNUserNotificationCenter,
+                _notification: &UNNotification,
+                done: &block2::DynBlock<dyn Fn(UNNotificationPresentationOptions)>,
+            ) {
+                done.call((UNNotificationPresentationOptions::Banner
+                    | UNNotificationPresentationOptions::List,));
+            }
+
+            /// Without custom actions or a dismiss action, any response is a
+            /// click on the notification itself.
+            #[unsafe(method(userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:))]
+            fn did_receive(
+                &self,
+                _center: &UNUserNotificationCenter,
+                response: &UNNotificationResponse,
+                done: &block2::DynBlock<dyn Fn()>,
+            ) {
+                let id = response.notification().request().identifier().to_string();
+                let found = {
+                    let mut pending = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+                    pending
+                        .iter()
+                        .position(|(p, _)| *p == id)
+                        .map(|i| pending.remove(i).1)
+                };
+                match found {
+                    Some(f) => f(),
+                    None => linfo!("notification {id} clicked; nothing to do"),
+                }
+                done.call(());
+            }
+        }
+    );
+
+    /// The notification centre with our delegate on it, or `None` outside a
+    /// bundle, where asking for the centre at all would throw.
+    fn center() -> Option<&'static Retained<UNUserNotificationCenter>> {
+        struct Center(Option<Retained<UNUserNotificationCenter>>);
+        // The centre is thread-safe; objc2 just can't say so.
+        unsafe impl Send for Center {}
+        unsafe impl Sync for Center {}
+        static CENTER: OnceLock<Center> = OnceLock::new();
+        CENTER.get_or_init(|| Center(make())).0.as_ref()
+    }
+
+    fn make() -> Option<Retained<UNUserNotificationCenter>> {
+        NSBundle::mainBundle().bundleIdentifier()?;
+        let center = UNUserNotificationCenter::currentNotificationCenter();
+        let delegate: Retained<Delegate> = unsafe { msg_send![Delegate::class(), new] };
+        center.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
+        // The centre holds its delegate weakly; this one lives as long
+        // as the process.
+        std::mem::forget(delegate);
+        Some(center)
+    }
+
+    pub fn show(title: &str, line1: &str, line2: Option<&str>, on_click: Option<OnClick>) {
+        let Some(center) = center() else {
+            return show_via_osascript(title, line1, line2);
+        };
+
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let id = format!("suavez-{}", NEXT.fetch_add(1, Ordering::Relaxed));
+        if let Some(f) = on_click {
+            let mut pending = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+            pending.push((id.clone(), f));
+            let over = pending.len().saturating_sub(KEEP);
+            pending.drain(..over);
+        }
+
+        // Same mapping as `osascript`: title / subtitle (the detail) / body.
+        let content = UNMutableNotificationContent::new();
+        content.setTitle(&NSString::from_str(title));
+        content.setBody(&NSString::from_str(line1));
+        if let Some(l2) = line2 {
+            content.setSubtitle(&NSString::from_str(l2));
+        }
+        let request = UNNotificationRequest::requestWithIdentifier_content_trigger(
+            &NSString::from_str(&id),
+            &content,
+            None,
+        );
+        // Asking every time costs nothing once answered, and adding only once
+        // permission is in hand means the first notification is not lost to
+        // the prompt that asks for it.
+        let (title, line1) = (title.to_string(), line1.to_string());
+        let added = RcBlock::new(move |err: *mut NSError| match unsafe { err.as_ref() } {
+            None => linfo!("notification shown: {title} / {line1}"),
+            Some(e) => lwarn!("could not show notification: {}", e.localizedDescription()),
+        });
+        let center_ = center.clone();
+        let asked = RcBlock::new(move |granted: Bool, err: *mut NSError| {
+            if granted.as_bool() {
+                center_.addNotificationRequest_withCompletionHandler(&request, Some(&added));
+            } else if let Some(e) = unsafe { err.as_ref() } {
+                lwarn!("notifications not allowed: {}", e.localizedDescription());
+            } else {
+                lwarn!("notifications are turned off for Sua Vez in System Settings");
+            }
+        });
+        center.requestAuthorizationWithOptions_completionHandler(
+            UNAuthorizationOptions::Alert,
+            &asked,
+        );
+    }
+
+    fn show_via_osascript(title: &str, line1: &str, line2: Option<&str>) {
         // Notification anatomy on macOS is title / subtitle / body. We map the
         // Windows title to the title, the first line to the body, and the
         // optional detail to the subtitle.
@@ -123,7 +259,6 @@ mod imp {
             Err(e) => lwarn!("could not show notification: {e}"),
         }
     }
-
     /// A double-quoted AppleScript string literal. Backslash and quote are
     /// escaped; newlines and tabs become their AppleScript escapes so a
     /// multi-line body cannot break out of the `-e` argument.
